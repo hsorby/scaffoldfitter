@@ -10,6 +10,8 @@ from opencmiss.utils.zinc.general import ChangeManager
 from opencmiss.zinc.context import Context
 from opencmiss.zinc.field import Field, FieldFindMeshLocation, FieldGroup
 from opencmiss.zinc.result import RESULT_OK, RESULT_WARNING_PART_DONE
+from scaffoldfitter.fitterstep import FitterStep
+from scaffoldfitter.fitterstepconfig import FitterStepConfig
 
 
 class Fitter:
@@ -53,7 +55,15 @@ class Fitter:
         self._markerDataLocationGroupField = None
         self._markerDataLocationGroup = None
         self._diagnosticLevel = 0
+        self._resetFitterSteps()
+
+    def _resetFitterSteps(self):
+        """
+        Reset fitterSteps to have one default initial FitterStepConfig - which can never be removed
+        """
         self._fitterSteps = []
+        fitterStep = FitterStepConfig()
+        self.addFitterStep(fitterStep)
 
     def decodeSettingsJSON(self, s : str, decoder):
         """
@@ -61,7 +71,7 @@ class Fitter:
         :param s: String of JSON encoded Fitter settings.
         :param decoder: decodeJSONFitterSteps(fitter, dct) for decodings FitterSteps.
         """
-        self._fitterSteps.clear()
+        self._resetFitterSteps()
         dct = json.loads(s, object_hook=lambda dct: decoder(self, dct))
         self._modelCoordinatesFieldName = dct["modelCoordinatesField"]
         self._dataCoordinatesFieldName = dct["dataCoordinatesField"]
@@ -83,6 +93,34 @@ class Fitter:
             }
         return json.dumps(dct, sort_keys=False, indent=4)
 
+    def getInitialFitterStepConfig(self):
+        return self._fitterSteps[0]
+
+    def addFitterStep(self, fitterStep : FitterStep, refFitterStep=None):
+        """
+        :param refFitterStep: FitterStep to insert after, or None to append.
+        """
+        assert fitterStep.getFitter() == None
+        if refFitterStep:
+            self._fitterSteps.insert(self._fitterSteps.index(refFitterStep) + 1, fitterStep)
+        else:
+            self._fitterSteps.append(fitterStep)
+        fitterStep._setFitter(self)
+
+    def removeFitterStep(self, fitterStep : FitterStep):
+        """
+        Remove fitterStep from Fitter.
+        :param fitterStep: FitterStep to remove. Must not be initial config.
+        :return: Next FitterStep after fitterStep, or previous if None.
+        """
+        assert fitterStep is not self.getInitialFitterStepConfig()
+        index = self._fitterSteps.index(fitterStep)
+        self._fitterSteps.remove(fitterStep)
+        fitterStep._setFitter(None)
+        if index >= len(self._fitterSteps):
+            index = -1
+        return self._fitterSteps[index]
+
     def load(self):
         """
         Read model and data and define fit fields and data.
@@ -94,7 +132,7 @@ class Fitter:
         self._loadModel()
         self._loadData()
         self._defineDataProjectionFields()
-        self.calculateDataProjections()
+        self._fitterSteps[0].run()  # initial config step will calculate data projections
 
     def _loadModel(self):
         result = self._region.readFile(self._zincModelFileName)
@@ -137,7 +175,7 @@ class Fitter:
                 else:
                     if writeDiagnostics:
                         print("Load data: Data group '" + dataGroupName + "' not found in model")
-            # if there both nodes and datapoints, offset datapoint identifiers to ensure different
+            # if there are both nodes and datapoints, offset datapoint identifiers to ensure different
             nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
             if nodes.getSize() > 0:
                 datapoints = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
@@ -444,12 +482,6 @@ class Fitter:
         if field:
             self.setModelCoordinatesField(field)
 
-    def runConfig(self):
-        """
-        Complete configuration setup.
-        """
-        self._hasRunConfig = True
-
     def _defineDataProjectionFields(self):
         self._dataProjectionLocationFields = []
         self._dataProjectionCoordinatesFields = []
@@ -516,7 +548,7 @@ class Fitter:
                         print("Fit Geometry:  Warning: Cannot project data for group " + groupName + " as field " + self._dataCoordinatesField.getName() + " is not defined on data")
                     continue
                 if not meshLocation.isDefinedAtLocation(fieldcache):
-                    # define meshLocation and on data Group:
+                    # define meshLocation and dataProjectionDirectionField on data Group:
                     nodetemplate = datapoints.createNodetemplate()
                     nodetemplate.defineField(meshLocation)
                     nodetemplate.defineField(self._dataProjectionDirectionField)
@@ -571,23 +603,6 @@ class Fitter:
             # remove temporary objects before ChangeManager exits
             del findMeshLocation
             del fieldcache
-
-    def _addFitterStep(self, fitterStep):
-        self._fitterSteps.append(fitterStep)
-
-    def _removeFitterStep(self, fitterStep):
-        self._fitterSteps.remove(fitterStep)
-
-    def getNextFitterStep(self, refFitterStep):
-        """
-        Return next fitter step after refFitterStep, or before if last, otherwise None.
-        """
-        index = self._fitterSteps.index(refFitterStep) + 1
-        if index >= len(self._fitterSteps):
-            index -= 2
-        if index < 0:
-            return None
-        return self._fitterSteps[index]
 
     def getDataProjectionDirectionField(self):
         return self._dataProjectionDirectionField
@@ -702,42 +717,3 @@ class Fitter:
         sr = sir.createStreamresourceFile(fileName)
         sir.setResourceDomainTypes(sr, Field.DOMAIN_TYPE_DATAPOINTS)
         self._region.write(sir)
-
-
-class FitterStep:
-    """
-    Base class for fitter steps.
-    """
-
-    def __init__(self, fitter : Fitter):
-        """
-        Construct and add to Fitter.
-        """
-        self._fitter = fitter
-        fitter._addFitterStep(self)
-        self._hasRun = False
-
-    def destroy(self):
-        """
-        Remove from Fitter.
-        """
-        self._fitter._removeFitterStep(self)
-        self._fitter = None
-
-    def getFitter(self):
-        return self._fitter
-
-    def hasRun(self):
-        return self._hasRun
-
-    def setHasRun(self, hasRun):
-        self._hasRun = hasRun
-
-    def getDiagnosticLevel(self):
-        return self._fitter.getDiagnosticLevel()
-
-    def run(self):
-        """
-        Override to perform action of derived FitStep
-        """
-        pass

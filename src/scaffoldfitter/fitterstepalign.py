@@ -2,26 +2,22 @@
 Fit step for gross alignment and scale.
 """
 
+import copy
 from opencmiss.utils.zinc.field import assignFieldParameters, createFieldsTransformations
 from opencmiss.utils.zinc.finiteelement import getNodeNameCentres
 from opencmiss.utils.zinc.general import ChangeManager
 from opencmiss.zinc.field import Field
 from opencmiss.zinc.optimisation import Optimisation
 from opencmiss.zinc.result import RESULT_OK, RESULT_WARNING_PART_DONE
-from scaffoldfitter.fitter import Fitter, FitterStep
+from scaffoldfitter.fitterstep import FitterStep
 
 class FitterStepAlign(FitterStep):
 
     _jsonTypeId = "_FitterStepAlign"
 
-    def __init__(self, fitter : Fitter):
-        super(FitterStepAlign, self).__init__(fitter)
+    def __init__(self):
+        super(FitterStepAlign, self).__init__()
         self._alignMarkers = False
-        markerNodeGroup, markerLocation, markerCoordinates, markerName = fitter.getMarkerModelFields()
-        markerDataGroup, markerDataCoordinates, markerDataName = fitter.getMarkerDataFields()
-        if markerNodeGroup and markerLocation and markerCoordinates and markerName and \
-            markerDataGroup and markerDataCoordinates and markerDataName:
-            self._alignMarkers = True
         self._rotation = [ 0.0, 0.0, 0.0 ]
         self._scale = 1.0
         self._translation = [ 0.0, 0.0, 0.0 ]
@@ -59,8 +55,12 @@ class FitterStepAlign(FitterStep):
     def setAlignMarkers(self, alignMarkers):
         """
         :param alignMarkers: True to automatically align to markers, otherwise False.
+        :return: True if state changed, otherwise False.
         """
-        self._alignMarkers = alignMarkers
+        if alignMarkers != self._alignMarkers:
+            self._alignMarkers = alignMarkers
+            return True
+        return False
 
     def getRotation(self):
         return self._rotation
@@ -71,9 +71,13 @@ class FitterStepAlign(FitterStep):
         0 = azimuth (about z)
         1 = elevation (about rotated y)
         2 = roll (about rotated x)
+        :return: True if state changed, otherwise False.
         """
         assert len(rotation) == 3, "FitterStepAlign:  Invalid rotation"
-        self._rotation = rotation
+        if rotation != self._rotation:
+            self._rotation = copy.copy(rotation)
+            return True
+        return False
 
     def getScale(self):
         return self._scale
@@ -81,8 +85,12 @@ class FitterStepAlign(FitterStep):
     def setScale(self, scale):
         """
         :param scale: Real scale.
+        :return: True if state changed, otherwise False.
         """
-        self._scale = scale
+        if scale != self._scale:
+            self._scale = scale
+            return True
+        return False
 
     def getTranslation(self):
         return self._translation
@@ -90,9 +98,13 @@ class FitterStepAlign(FitterStep):
     def setTranslation(self, translation):
         """
         :param translation: [ x, y, z ].
+        :return: True if state changed, otherwise False.
         """
         assert len(translation) == 3, "FitterStepAlign:  Invalid translation"
-        self._translation = translation
+        if translation != self._translation:
+            self._translation = copy.copy(translation)
+            return True
+        return False
 
     def run(self):
         """

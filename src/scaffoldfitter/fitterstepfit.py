@@ -7,14 +7,14 @@ from opencmiss.utils.zinc.general import ChangeManager
 from opencmiss.zinc.field import Field, FieldFindMeshLocation
 from opencmiss.zinc.optimisation import Optimisation
 from opencmiss.zinc.result import RESULT_OK
-from scaffoldfitter.fitter import Fitter, FitterStep
+from scaffoldfitter.fitterstep import FitterStep
 
 class FitterStepFit(FitterStep):
 
     _jsonTypeId = "_FitterStepFit"
 
-    def __init__(self, fitter : Fitter):
-        super(FitterStepFit, self).__init__(fitter)
+    def __init__(self):
+        super(FitterStepFit, self).__init__()
         self._markerWeight = 1.0
         self._strainPenaltyWeight = 0.0
         self._curvaturePenaltyWeight = 0.0
