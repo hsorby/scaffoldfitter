@@ -56,5 +56,5 @@ class FitterStepConfig(FitterStep):
         """
         Calculate data projections with current settings.
         """
-        self._fitter.calculateDataProjections()
+        self._fitter.calculateDataProjections(self)
         self.setHasRun(True)

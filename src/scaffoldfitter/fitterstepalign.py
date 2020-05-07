@@ -125,7 +125,7 @@ class FitterStepAlign(FitterStep):
             self._fitter.updateModelReferenceCoordinates()
             del fieldassignment
             del modelCoordinatesTransformed
-        self._fitter.calculateDataProjections()
+        self._fitter.calculateDataProjections(self)
         self.setHasRun(True)
 
     def _doAlignMarkers(self):

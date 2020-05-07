@@ -142,7 +142,7 @@ class FitterStepFit(FitterStep):
                 solutionReport = optimisation.getSolutionReport()
                 print(solutionReport)
             assert result == RESULT_OK, "Fit Geometry:  Optimisation failed with result " + str(result)
-            self._fitter.calculateDataProjections()
+            self._fitter.calculateDataProjections(self)
         if self.getDiagnosticLevel() > 0:
             print("--------")
 
