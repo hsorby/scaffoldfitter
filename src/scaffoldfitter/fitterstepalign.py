@@ -3,13 +3,48 @@ Fit step for gross alignment and scale.
 """
 
 import copy
-from opencmiss.utils.zinc.field import assignFieldParameters, createFieldsTransformations
+from opencmiss.utils.zinc.field import assignFieldParameters, create_field_euler_angles_rotation_matrix
 from opencmiss.utils.zinc.finiteelement import getNodeNameCentres
 from opencmiss.utils.zinc.general import ChangeManager
 from opencmiss.zinc.field import Field
 from opencmiss.zinc.optimisation import Optimisation
 from opencmiss.zinc.result import RESULT_OK, RESULT_WARNING_PART_DONE
 from scaffoldfitter.fitterstep import FitterStep
+
+
+def createFieldsTransformations(coordinates: Field, rotation_angles=None, scale_value=1.0, \
+    translation_offsets=None, translation_scale_factor=1.0):
+    """
+    Create constant fields for rotation, scale and translation containing the supplied
+    values, plus the transformed coordinates applying them in the supplied order.
+    :param coordinates: The coordinate field to scale, 3 components.
+    :param rotation_angles: List of euler angles, length = number of components.
+     See create_field_euler_angles_rotation_matrix.
+    :param scale_value: Scalar to multiply all components of coordinates.
+    :param translation_offsets: List of offsets, length = number of components.
+    :param translation_scale_factor: Scaling to multiply translation by so it's magnitude can remain
+    close to other parameters for rotation (radians) and scale (assumed close to unit).
+    :return: 4 fields: transformedCoordinates, rotation, scale, translation
+    """
+    if rotation_angles is None:
+        rotation_angles = [0.0, 0.0, 0.0]
+    if translation_offsets is None:
+        translation_offsets = [0.0, 0.0, 0.0]
+    components_count = coordinates.getNumberOfComponents()
+    assert (components_count == 3) and (len(rotation_angles) == components_count) and isinstance(scale_value, float) \
+        and (len(translation_offsets) == components_count), "createFieldsTransformations.  Invalid arguments"
+    fieldmodule = coordinates.getFieldmodule()
+    with ChangeManager(fieldmodule):
+        # scale, translate and rotate model, in that order
+        rotation = fieldmodule.createFieldConstant(rotation_angles)
+        scale = fieldmodule.createFieldConstant(scale_value)
+        translation = fieldmodule.createFieldConstant(translation_offsets)
+        rotation_matrix = create_field_euler_angles_rotation_matrix(fieldmodule, rotation)
+        rotated_coordinates = fieldmodule.createFieldMatrixMultiply(components_count, rotation_matrix, coordinates)
+        transformed_coordinates = rotated_coordinates*scale + (translation if (translation_scale_factor == 1.0) else \
+            translation*fieldmodule.createFieldConstant([ translation_scale_factor ]*components_count))
+        assert transformed_coordinates.isValid()
+    return transformed_coordinates, rotation, scale, translation
 
 class FitterStepAlign(FitterStep):
 
@@ -179,6 +214,7 @@ class FitterStepAlign(FitterStep):
         assert len(markerMap) >= 3, "Align:  Only " + str(len(markerMap)) + " markers - need at least 3"
         region = self._fitter._context.createRegion()
         fieldmodule = region.getFieldmodule()
+        dataScale = self._fitter.getDataScale()
         with ChangeManager(fieldmodule):
             modelCoordinates = fieldmodule.createFieldFiniteElement(3)
             dataCoordinates = fieldmodule.createFieldFiniteElement(3)
@@ -196,20 +232,56 @@ class FitterStepAlign(FitterStep):
                 result2 = dataCoordinates.assignReal(fieldcache, positions[1])
                 assert (result1 == RESULT_OK) and (result2 == RESULT_OK), "Align:  Failed to set up data for alignment to markers optimisation"
             del fieldcache
-            modelCoordinatesTransformed, rotation, scale, translation = createFieldsTransformations(modelCoordinates)
+            modelCoordinatesTransformed, rotation, scale, translation = createFieldsTransformations(modelCoordinates, translation_scale_factor=dataScale)
             # create objective = sum of squares of vector from modelCoordinatesTransformed to dataCoordinates
             markerDiff = fieldmodule.createFieldSubtract(dataCoordinates, modelCoordinatesTransformed)
-            objective = fieldmodule.createFieldNodesetSumSquares(markerDiff, nodes)
+            scaledMarkerDiff = markerDiff*fieldmodule.createFieldConstant([ 1.0/dataScale ]*3)
+            objective = fieldmodule.createFieldNodesetSumSquares(scaledMarkerDiff, nodes)
+            #objective = fieldmodule.createFieldNodesetSum(fieldmodule.createFieldMagnitude(scaledMarkerDiff), nodes)
             assert objective.isValid(), "Align:  Failed to set up objective function for alignment to markers optimisation"
 
         # future: pre-fit to avoid gimbal lock
 
         optimisation = fieldmodule.createOptimisation()
         optimisation.setMethod(Optimisation.METHOD_LEAST_SQUARES_QUASI_NEWTON)
+        #optimisation.setMethod(Optimisation.METHOD_QUASI_NEWTON)
         optimisation.addObjectiveField(objective)
         optimisation.addIndependentField(rotation)
         optimisation.addIndependentField(scale)
         optimisation.addIndependentField(translation)
+
+        #FunctionTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_FUNCTION_TOLERANCE)
+        #GradientTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_GRADIENT_TOLERANCE)
+        #StepTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_STEP_TOLERANCE)
+        #MaximumStep = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_MAXIMUM_STEP)
+        #MinimumStep = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_MINIMUM_STEP)
+        #LinesearchTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_LINESEARCH_TOLERANCE)
+        #TrustRegionSize = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_TRUST_REGION_SIZE)
+
+        #tol_scale = dataScale*dataScale
+        #FunctionTolerance *= tol_scale
+        #optimisation.setAttributeReal(Optimisation.ATTRIBUTE_FUNCTION_TOLERANCE, FunctionTolerance)
+        #GradientTolerance *= tol_scale
+        #optimisation.setAttributeReal(Optimisation.ATTRIBUTE_GRADIENT_TOLERANCE, GradientTolerance)
+        #StepTolerance *= tol_scale
+        #optimisation.setAttributeReal(Optimisation.ATTRIBUTE_STEP_TOLERANCE, StepTolerance)
+        #MaximumStep *= tol_scale
+        #optimisation.setAttributeReal(Optimisation.ATTRIBUTE_MAXIMUM_STEP, MaximumStep)
+        #MinimumStep *= tol_scale
+        #optimisation.setAttributeReal(Optimisation.ATTRIBUTE_MINIMUM_STEP, MinimumStep)
+        #LinesearchTolerance *= dataScale
+        #optimisation.setAttributeReal(Optimisation.ATTRIBUTE_LINESEARCH_TOLERANCE, LinesearchTolerance)
+        #TrustRegionSize *= dataScale
+        #optimisation.setAttributeReal(Optimisation.ATTRIBUTE_TRUST_REGION_SIZE, TrustRegionSize)
+
+        #if self.getDiagnosticLevel() > 0:
+        #    print("Function Tolerance", FunctionTolerance)
+        #    print("Gradient Tolerance", GradientTolerance)
+        #    print("Step Tolerance", StepTolerance)
+        #    print("Maximum Step", MaximumStep)
+        #    print("Minimum Step", MinimumStep)
+        #    print("Linesearch Tolerance", LinesearchTolerance)
+        #    print("Trust Region Size", TrustRegionSize)
 
         result = optimisation.optimise()
         if self.getDiagnosticLevel() > 1:
@@ -221,4 +293,5 @@ class FitterStepAlign(FitterStep):
         result1, self._rotation = rotation.evaluateReal(fieldcache, 3)
         result2, self._scale = scale.evaluateReal(fieldcache, 1)
         result3, self._translation = translation.evaluateReal(fieldcache, 3)
+        self._translation = [ s*dataScale for s in self._translation ]
         assert (result1 == RESULT_OK) and (result2 == RESULT_OK) and (result3 == RESULT_OK), "Align:  Failed to evaluate transformation for alignment to markers"

@@ -73,6 +73,9 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fitter = Fitter(zinc_model_file, zinc_data_file)
         fitter.setDiagnosticLevel(1)
         fitter.load()
+        dataScale = fitter.getDataScale()
+        self.assertAlmostEqual(dataScale, 0.9958462809921166, delta=1.0E-7)
+        fitter._dataScale = 1.0  # to match previous test results
 
         self.assertEqual(fitter.getModelCoordinatesField().getName(), "coordinates")
         self.assertEqual(fitter.getDataCoordinatesField().getName(), "data_coordinates")
@@ -114,6 +117,10 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         self.assertEqual(1, len(fitter.getFitterSteps()))  # there is always an initial FitterStepConfig
         fitter.setDiagnosticLevel(1)
         fitter.load()
+        dataScale = fitter.getDataScale()
+        self.assertAlmostEqual(dataScale, 0.991338312625885, delta=1.0E-7)
+        fitter._dataScale = 1.0  # to match previous test results
+
         coordinates = fitter.getModelCoordinatesField()
         self.assertEqual(coordinates.getName(), "coordinates")
         self.assertEqual(fitter.getDataCoordinatesField().getName(), "data_coordinates")

@@ -6,7 +6,7 @@ import json
 from opencmiss.utils.maths.vectorops import sub
 from opencmiss.utils.zinc.field import assignFieldParameters, createFieldFiniteElementClone, getGroupList, getManagedFieldNames, \
     findOrCreateFieldFiniteElement, findOrCreateFieldStoredMeshLocation, getUniqueFieldName, orphanFieldByName
-from opencmiss.utils.zinc.finiteelement import evaluateFieldNodesetMean, findNodeWithName, getMaximumNodeIdentifier
+from opencmiss.utils.zinc.finiteelement import evaluateFieldNodesetMean, evaluateFieldNodesetRange, findNodeWithName, getMaximumNodeIdentifier
 from opencmiss.utils.zinc.general import ChangeManager
 from opencmiss.zinc.context import Context
 from opencmiss.zinc.field import Field, FieldFindMeshLocation, FieldGroup
@@ -146,9 +146,30 @@ class Fitter:
         self._loadModel()
         self._loadData()
         self._defineDataProjectionFields()
+        # get centre and scale of data coordinates to manage fitting tolerances and steps
+        datapoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
+        minimums, maximums = evaluateFieldNodesetRange(self._dataCoordinatesField, datapoints)
+        self._dataCentre = [ 0.5*(minimums[c] + maximums[c]) for c in range(3) ]
+        self._dataScale = max((maximums[c] - minimums[c]) for c in range(3))
+        if self._diagnosticLevel > 0:
+            print("Load data: data coordinates centre ", self._dataCentre)
+            print("Load data: data coordinates scale ", self._dataScale)
         for step in self._fitterSteps:
             step.setHasRun(False)
         self._fitterSteps[0].run()  # initial config step will calculate data projections
+
+
+    def getDataCentre(self):
+        """
+        :return: Pre-calculated centre of data on [ x, y, z].
+        """
+        return self._dataScale
+
+    def getDataScale(self):
+        """
+        :return: Pre-calculated maximum span of data on x, y, or z.
+        """
+        return self._dataScale
 
     def _loadModel(self):
         result = self._region.readFile(self._zincModelFileName)
@@ -571,7 +592,7 @@ class Fitter:
             dataCentreField = self._fieldmodule.createFieldNodesetMean(dataCoordinates, dataGroup)
             result, dataCentre = dataCentreField.evaluateReal(fieldcache, dataCoordinates.getNumberOfComponents())
             if result != RESULT_OK:
-                print("Fit Geometry:  Error: Centre Groups projection. Failed to get mean coordinates of data for group " + groupName)
+                print("Error: Centre Groups projection failed to get mean coordinates of data for group " + groupName)
                 return
             #print("Centre Groups dataCentre", dataCentre)
             # get geometric centre of meshGroup
@@ -582,7 +603,7 @@ class Fitter:
             result1, coordinatesIntegral = meshGroupCoordinatesIntegral.evaluateReal(fieldcache, self._modelCoordinatesField.getNumberOfComponents())
             result2, area = meshGroupArea.evaluateReal(fieldcache, 1)
             if (result1 != RESULT_OK) or (result2 != RESULT_OK) or (area <= 0.0):
-                print("Fit Geometry:  Error: Centre Groups projection. Failed to get mean coordinates of mesh for group " + groupName)
+                print("Error: Centre Groups projection failed to get mean coordinates of mesh for group " + groupName)
                 return
             meshCentre = [ s/area for s in coordinatesIntegral ]
             #print("Centre Groups meshCentre", meshCentre)
@@ -603,13 +624,13 @@ class Fitter:
                 #    mesh = meshLocation.getMesh()
                 #    print("--> mesh", mesh.isValid(), mesh.getDimension(), findMeshLocation.getMesh().getDimension())
                 #    print("node", node.getIdentifier(), "is defined", meshLocation.isDefinedAtLocation(fieldcache))
-                assert result == RESULT_OK, "Fit Geometry:  Failed to assign data projection mesh location for group " + groupName
+                assert result == RESULT_OK, "Error: Failed to assign data projection mesh location for group " + groupName
                 dataProjectionNodesetGroup.addNode(node)
             node = nodeIter.next()
         pointsProjected = dataProjectionNodesetGroup.getSize() - sizeBefore
         if pointsProjected < dataGroup.getSize():
             if self.getDiagnosticLevel() > 0:
-                print("Fit Geometry:  Warning: Only " + str(pointsProjected) + " of " + str(dataGroup.getSize()) + " data points projected for group " + groupName)
+                print("Warning: Only " + str(pointsProjected) + " of " + str(dataGroup.getSize()) + " data points projected for group " + groupName)
         return 
 
     def calculateDataProjections(self, fitterStep : FitterStep):
@@ -638,7 +659,8 @@ class Fitter:
                         break
                 else:
                     if self.getDiagnosticLevel() > 0:
-                        print("Fit Geometry:  Warning: Cannot project data for group " + groupName + " as no matching mesh group")
+                        if group != self._markerGroup:
+                            print("Warning: Cannot project data for group " + groupName + " as no matching mesh group")
                     continue
                 meshLocation = self._dataProjectionLocationFields[dimension - 1]
                 dataProjectionNodesetGroup = self._dataProjectionNodesetGroups[dimension - 1]
@@ -647,7 +669,7 @@ class Fitter:
                 fieldcache.setNode(node)
                 if not self._dataCoordinatesField.isDefinedAtLocation(fieldcache):
                     if self.getDiagnosticLevel() > 0:
-                        print("Fit Geometry:  Warning: Cannot project data for group " + groupName + " as field " + self._dataCoordinatesField.getName() + " is not defined on data")
+                        print("Warning: Cannot project data for group " + groupName + " as field " + self._dataCoordinatesField.getName() + " is not defined on data")
                     continue
                 if not meshLocation.isDefinedAtLocation(fieldcache):
                     # define meshLocation and dataProjectionDirectionField on data Group:
@@ -670,7 +692,7 @@ class Fitter:
                     fieldassignment.setNodeset(nodesetGroup)
                     result = fieldassignment.assign()
                     assert result in [ RESULT_OK, RESULT_WARNING_PART_DONE ], \
-                        "Fit Geometry:  Failed to assign data projection directions for dimension " + str(dimension)
+                        "Error:  Failed to assign data projection directions for dimension " + str(dimension)
                     del fieldassignment
 
             if self.getDiagnosticLevel() > 0:
