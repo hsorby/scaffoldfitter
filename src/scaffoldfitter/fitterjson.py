@@ -3,6 +3,7 @@ Factory function for constructing FitterStep types from JSON Dict.
 """
 from scaffoldfitter.fitter import Fitter
 from scaffoldfitter.fitterstepalign import FitterStepAlign
+from scaffoldfitter.fitterstepconfig import FitterStepConfig
 from scaffoldfitter.fitterstepfit import FitterStepFit
 
 
@@ -15,9 +16,13 @@ def decodeJSONFitterSteps(fitter : Fitter, dct):
     lambda dct: decodeJSONFitterSteps(fitter, dct)
     :param fitter: Owning Fitter object for new FitterSteps.
     """
-    for FitterStepType in [ FitterStepAlign, FitterStepFit ]:
+    for FitterStepType in [ FitterStepAlign, FitterStepConfig, FitterStepFit ]:
         if FitterStepType.getJsonTypeId() in dct:
-            fitterStep = FitterStepType(fitter)
+            if (FitterStepType is FitterStepConfig) and (len(fitter.getFitterSteps()) == 1):
+                fitterStep = fitter.getInitialFitterStepConfig()
+            else:
+                fitterStep = FitterStepType()
+                fitter.addFitterStep(fitterStep)
             fitterStep.decodeSettingsJSONDict(dct)
             return fitterStep
     return dct

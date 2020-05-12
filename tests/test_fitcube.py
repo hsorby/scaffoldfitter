@@ -6,6 +6,7 @@ from opencmiss.zinc.result import RESULT_OK
 from scaffoldfitter.fitter import Fitter
 from scaffoldfitter.fitterjson import decodeJSONFitterSteps
 from scaffoldfitter.fitterstepalign import FitterStepAlign
+from scaffoldfitter.fitterstepconfig import FitterStepConfig
 from scaffoldfitter.fitterstepfit import FitterStepFit
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -72,6 +73,9 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fitter = Fitter(zinc_model_file, zinc_data_file)
         fitter.setDiagnosticLevel(1)
         fitter.load()
+        dataScale = fitter.getDataScale()
+        self.assertAlmostEqual(dataScale, 0.9958462809921166, delta=1.0E-7)
+        fitter._dataScale = 1.0  # to match previous test results
 
         self.assertEqual(fitter.getModelCoordinatesField().getName(), "coordinates")
         self.assertEqual(fitter.getDataCoordinatesField().getName(), "data_coordinates")
@@ -82,12 +86,12 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         assertAlmostEqualList(self, bottomCentre1, [ 0.5, 0.5, 0.0 ], delta=1.0E-7)
         assertAlmostEqualList(self, sidesCentre1, [ 0.5, 0.5, 0.5 ], delta=1.0E-7)
         assertAlmostEqualList(self, topCentre1, [ 0.5, 0.5, 1.0 ], delta=1.0E-7)
-        align = FitterStepAlign(fitter)
+        align = FitterStepAlign()
+        fitter.addFitterStep(align)
         align.setScale(1.1)
         align.setTranslation([ 0.1, -0.2, 0.3 ])
         align.setRotation([ math.pi/4.0, math.pi/8.0, math.pi/2.0 ])
-        self.assertTrue(align.isAlignMarkers())
-        align.setAlignMarkers(False)
+        self.assertFalse(align.isAlignMarkers())
         align.run()
         rotation = align.getRotation()
         scale = align.getScale()
@@ -110,8 +114,13 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         zinc_model_file = os.path.join(here, "resources", "cube_to_sphere.exf")
         zinc_data_file = os.path.join(here, "resources", "cube_to_sphere_data_regular.exf")
         fitter = Fitter(zinc_model_file, zinc_data_file)
+        self.assertEqual(1, len(fitter.getFitterSteps()))  # there is always an initial FitterStepConfig
         fitter.setDiagnosticLevel(1)
         fitter.load()
+        dataScale = fitter.getDataScale()
+        self.assertAlmostEqual(dataScale, 0.991338312625885, delta=1.0E-7)
+        fitter._dataScale = 1.0  # to match previous test results
+
         coordinates = fitter.getModelCoordinatesField()
         self.assertEqual(coordinates.getName(), "coordinates")
         self.assertEqual(fitter.getDataCoordinatesField().getName(), "data_coordinates")
@@ -128,9 +137,11 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         self.assertEqual(result, RESULT_OK)
         self.assertAlmostEqual(volume, 1.0, delta=1.0E-7)
 
-        align = FitterStepAlign(fitter)
+        align = FitterStepAlign()
+        fitter.addFitterStep(align)
+        self.assertEqual(2, len(fitter.getFitterSteps()))
+        self.assertTrue(align.setAlignMarkers(True))
         self.assertTrue(align.isAlignMarkers())
-        align.setAlignMarkers(True)
         align.run()
         #fitter.getRegion().writeFile(os.path.join(here, "resources", "km_fitgeometry2.exf"))
         rotation = align.getRotation()
@@ -146,7 +157,9 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         self.assertEqual(result, RESULT_OK)
         self.assertAlmostEqual(volume, 0.5211506471189844, delta=1.0E-6)
 
-        fit1 = FitterStepFit(fitter)
+        fit1 = FitterStepFit()
+        fitter.addFitterStep(fit1)
+        self.assertEqual(3, len(fitter.getFitterSteps()))
         fit1.setMarkerWeight(1.0)
         fit1.setCurvaturePenaltyWeight(0.1)
         fit1.setNumberOfIterations(3)
@@ -166,9 +179,10 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fitter2 = Fitter(zinc_model_file, zinc_data_file)
         fitter2.decodeSettingsJSON(s, decodeJSONFitterSteps)
         fitterSteps = fitter2.getFitterSteps()
-        self.assertEqual(2, len(fitterSteps))
-        self.assertTrue(isinstance(fitterSteps[0], FitterStepAlign))
-        self.assertTrue(isinstance(fitterSteps[1], FitterStepFit))
+        self.assertEqual(3, len(fitterSteps))
+        self.assertTrue(isinstance(fitterSteps[0], FitterStepConfig))
+        self.assertTrue(isinstance(fitterSteps[1], FitterStepAlign))
+        self.assertTrue(isinstance(fitterSteps[2], FitterStepFit))
         #fitter2.load()
         #for fitterStep in fitterSteps:
         #    fitterStep.run()

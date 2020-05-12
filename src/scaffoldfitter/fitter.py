@@ -3,13 +3,16 @@ Main class for fitting scaffolds.
 """
 
 import json
+from opencmiss.utils.maths.vectorops import sub
 from opencmiss.utils.zinc.field import assignFieldParameters, createFieldFiniteElementClone, getGroupList, getManagedFieldNames, \
     findOrCreateFieldFiniteElement, findOrCreateFieldStoredMeshLocation, getUniqueFieldName, orphanFieldByName
-from opencmiss.utils.zinc.finiteelement import evaluateFieldNodesetMean, findNodeWithName, getMaximumNodeIdentifier
+from opencmiss.utils.zinc.finiteelement import evaluateFieldNodesetMean, evaluateFieldNodesetRange, findNodeWithName, getMaximumNodeIdentifier
 from opencmiss.utils.zinc.general import ChangeManager
 from opencmiss.zinc.context import Context
 from opencmiss.zinc.field import Field, FieldFindMeshLocation, FieldGroup
 from opencmiss.zinc.result import RESULT_OK, RESULT_WARNING_PART_DONE
+from scaffoldfitter.fitterstep import FitterStep
+from scaffoldfitter.fitterstepconfig import FitterStepConfig
 
 
 class Fitter:
@@ -53,7 +56,15 @@ class Fitter:
         self._markerDataLocationGroupField = None
         self._markerDataLocationGroup = None
         self._diagnosticLevel = 0
+        self._resetFitterSteps()
+
+    def _resetFitterSteps(self):
+        """
+        Reset fitterSteps to have one default initial FitterStepConfig - which can never be removed
+        """
         self._fitterSteps = []
+        fitterStep = FitterStepConfig()
+        self.addFitterStep(fitterStep)
 
     def decodeSettingsJSON(self, s : str, decoder):
         """
@@ -61,7 +72,7 @@ class Fitter:
         :param s: String of JSON encoded Fitter settings.
         :param decoder: decodeJSONFitterSteps(fitter, dct) for decodings FitterSteps.
         """
-        self._fitterSteps.clear()
+        self._resetFitterSteps()
         dct = json.loads(s, object_hook=lambda dct: decoder(self, dct))
         self._modelCoordinatesFieldName = dct["modelCoordinatesField"]
         self._dataCoordinatesFieldName = dct["dataCoordinatesField"]
@@ -83,6 +94,47 @@ class Fitter:
             }
         return json.dumps(dct, sort_keys=False, indent=4)
 
+    def getInitialFitterStepConfig(self):
+        """
+        Get first fitter step which must exist and be a FitterStepConfig.
+        """
+        return self._fitterSteps[0]
+
+    def getActiveFitterStepConfig(self, refFitterStep : FitterStep):
+        """
+        Get latest FitterStepConfig applicable to refFitterStep.
+        Can be itself.
+        """
+        for index in range(self._fitterSteps.index(refFitterStep), -1, -1):
+            if isinstance(self._fitterSteps[index], FitterStepConfig):
+                return self._fitterSteps[index]
+        assert False, "getActiveFitterStepConfig.  Could not find config."
+
+    def addFitterStep(self, fitterStep : FitterStep, refFitterStep=None):
+        """
+        :param refFitterStep: FitterStep to insert after, or None to append.
+        """
+        assert fitterStep.getFitter() == None
+        if refFitterStep:
+            self._fitterSteps.insert(self._fitterSteps.index(refFitterStep) + 1, fitterStep)
+        else:
+            self._fitterSteps.append(fitterStep)
+        fitterStep._setFitter(self)
+
+    def removeFitterStep(self, fitterStep : FitterStep):
+        """
+        Remove fitterStep from Fitter.
+        :param fitterStep: FitterStep to remove. Must not be initial config.
+        :return: Next FitterStep after fitterStep, or previous if None.
+        """
+        assert fitterStep is not self.getInitialFitterStepConfig()
+        index = self._fitterSteps.index(fitterStep)
+        self._fitterSteps.remove(fitterStep)
+        fitterStep._setFitter(None)
+        if index >= len(self._fitterSteps):
+            index = -1
+        return self._fitterSteps[index]
+
     def load(self):
         """
         Read model and data and define fit fields and data.
@@ -94,7 +146,30 @@ class Fitter:
         self._loadModel()
         self._loadData()
         self._defineDataProjectionFields()
-        self.calculateDataProjections()
+        # get centre and scale of data coordinates to manage fitting tolerances and steps
+        datapoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
+        minimums, maximums = evaluateFieldNodesetRange(self._dataCoordinatesField, datapoints)
+        self._dataCentre = [ 0.5*(minimums[c] + maximums[c]) for c in range(3) ]
+        self._dataScale = max((maximums[c] - minimums[c]) for c in range(3))
+        if self._diagnosticLevel > 0:
+            print("Load data: data coordinates centre ", self._dataCentre)
+            print("Load data: data coordinates scale ", self._dataScale)
+        for step in self._fitterSteps:
+            step.setHasRun(False)
+        self._fitterSteps[0].run()  # initial config step will calculate data projections
+
+
+    def getDataCentre(self):
+        """
+        :return: Pre-calculated centre of data on [ x, y, z].
+        """
+        return self._dataScale
+
+    def getDataScale(self):
+        """
+        :return: Pre-calculated maximum span of data on x, y, or z.
+        """
+        return self._dataScale
 
     def _loadModel(self):
         result = self._region.readFile(self._zincModelFileName)
@@ -137,7 +212,7 @@ class Fitter:
                 else:
                     if writeDiagnostics:
                         print("Load data: Data group '" + dataGroupName + "' not found in model")
-            # if there both nodes and datapoints, offset datapoint identifiers to ensure different
+            # if there are both nodes and datapoints, offset datapoint identifiers to ensure different
             nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
             if nodes.getSize() > 0:
                 datapoints = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
@@ -182,6 +257,31 @@ class Fitter:
         assert result == RESULT_OK, "Failed to load datapoints"
         self._discoverDataCoordinatesField()
         self._discoverMarkerGroup()
+
+    def run(self, endStep=None):
+        """
+        Run either all remaining fitter steps or up to specified end step.
+        :param endStep: Last fitter step to run, or None to run all.
+        :return: True if reloaded (so scene changed), False if not.
+        """
+        if not endStep:
+            endStep = self._fitterSteps[-1]
+        endIndex = self._fitterSteps.index(endStep)
+        # reload only if necessary
+        if endStep.hasRun() and (endIndex < (len(self._fitterSteps) - 1)) and self._fitterSteps[endIndex + 1].hasRun():
+            # re-load to get back to current state
+            self.load()
+            for index in range(1, endIndex + 1):
+                self._fitterSteps[index].run()
+            return True
+        if endIndex == 0:
+            endStep.run()  # force re-run initial config
+        else:
+            # run from current point up to step
+            for index in range(1, endIndex + 1):
+                if not self._fitterSteps[index].hasRun():
+                    self._fitterSteps[index].run()
+        return False
 
     def getDataCoordinatesField(self):
         return self._dataCoordinatesField
@@ -444,12 +544,6 @@ class Fitter:
         if field:
             self.setModelCoordinatesField(field)
 
-    def runConfig(self):
-        """
-        Complete configuration setup.
-        """
-        self._hasRunConfig = True
-
     def _defineDataProjectionFields(self):
         self._dataProjectionLocationFields = []
         self._dataProjectionCoordinatesFields = []
@@ -479,13 +573,74 @@ class Fitter:
             self._dataProjectionDirectionField = findOrCreateFieldFiniteElement(self._fieldmodule, "data_projection_direction",
                 components_count = 3, component_names = [ "x", "y", "z" ])
 
-    def calculateDataProjections(self):
+    def calculateGroupDataProjections(self, fieldcache, group, dataGroup, meshGroup, meshLocation, activeFitterStepConfig : FitterStepConfig):
+        """
+        Project data points for group. Assumes called while ChangeManager is active for fieldmodule.
+        :param group: The FieldGroup being fitted (parent of dataGroup, meshGroup).
+        :param dataGroup: Nodeset group containing data points to project.
+        :param meshGroup: MeshGroup containing surfaces/lines to project onto.
+        :param meshLocation: FieldStoredMeshLocation to store found location in.
+        :param activeFitterStepConfig: Where to get current projection modes from.
+        """
+        groupName = group.getName()
+        dimension = meshGroup.getDimension()
+        dataProjectionNodesetGroup = self._dataProjectionNodesetGroups[dimension - 1]
+        sizeBefore = dataProjectionNodesetGroup.getSize()
+        dataCoordinates = self._dataCoordinatesField
+        if activeFitterStepConfig.isProjectionCentreGroups():
+            # get geometric centre of dataGroup
+            dataCentreField = self._fieldmodule.createFieldNodesetMean(dataCoordinates, dataGroup)
+            result, dataCentre = dataCentreField.evaluateReal(fieldcache, dataCoordinates.getNumberOfComponents())
+            if result != RESULT_OK:
+                print("Error: Centre Groups projection failed to get mean coordinates of data for group " + groupName)
+                return
+            #print("Centre Groups dataCentre", dataCentre)
+            # get geometric centre of meshGroup
+            meshGroupCoordinatesIntegral = self._fieldmodule.createFieldMeshIntegral(self._modelCoordinatesField, self._modelCoordinatesField, meshGroup)
+            meshGroupCoordinatesIntegral.setNumbersOfPoints([3])
+            meshGroupArea = self._fieldmodule.createFieldMeshIntegral(self._fieldmodule.createFieldConstant([1.0]), self._modelCoordinatesField, meshGroup)
+            meshGroupArea.setNumbersOfPoints([3])
+            result1, coordinatesIntegral = meshGroupCoordinatesIntegral.evaluateReal(fieldcache, self._modelCoordinatesField.getNumberOfComponents())
+            result2, area = meshGroupArea.evaluateReal(fieldcache, 1)
+            if (result1 != RESULT_OK) or (result2 != RESULT_OK) or (area <= 0.0):
+                print("Error: Centre Groups projection failed to get mean coordinates of mesh for group " + groupName)
+                return
+            meshCentre = [ s/area for s in coordinatesIntegral ]
+            #print("Centre Groups meshCentre", meshCentre)
+            # offset dataCoordinates to make dataCentre coincide with meshCentre
+            dataCoordinates = dataCoordinates + self._fieldmodule.createFieldConstant(sub(meshCentre, dataCentre))
+
+        findMeshLocation = self._fieldmodule.createFieldFindMeshLocation(dataCoordinates, self._modelCoordinatesField, meshGroup)
+        findMeshLocation.setSearchMode(FieldFindMeshLocation.SEARCH_MODE_NEAREST)
+        nodeIter = dataGroup.createNodeiterator()
+        node = nodeIter.next()
+        while node.isValid():
+            fieldcache.setNode(node)
+            element, xi = findMeshLocation.evaluateMeshLocation(fieldcache, dimension)
+            if element.isValid():
+                result = meshLocation.assignMeshLocation(fieldcache, element, xi)
+                #print(result, "node", node.getIdentifier(), "element", element.getIdentifier(), "xi", xi)
+                #if result != RESULT_OK:
+                #    mesh = meshLocation.getMesh()
+                #    print("--> mesh", mesh.isValid(), mesh.getDimension(), findMeshLocation.getMesh().getDimension())
+                #    print("node", node.getIdentifier(), "is defined", meshLocation.isDefinedAtLocation(fieldcache))
+                assert result == RESULT_OK, "Error: Failed to assign data projection mesh location for group " + groupName
+                dataProjectionNodesetGroup.addNode(node)
+            node = nodeIter.next()
+        pointsProjected = dataProjectionNodesetGroup.getSize() - sizeBefore
+        if pointsProjected < dataGroup.getSize():
+            if self.getDiagnosticLevel() > 0:
+                print("Warning: Only " + str(pointsProjected) + " of " + str(dataGroup.getSize()) + " data points projected for group " + groupName)
+        return 
+
+    def calculateDataProjections(self, fitterStep : FitterStep):
         """
         Find projections of datapoints' coordinates onto model coordinates,
         by groups i.e. from datapoints group onto matching 2-D or 1-D mesh group.
         Calculate and store projection direction unit vector.
         """
         assert self._dataCoordinatesField and self._modelCoordinatesField
+        activeFitterStepConfig = self.getActiveFitterStepConfig(fitterStep)
         with ChangeManager(self._fieldmodule):
             findMeshLocation = None
             datapoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
@@ -504,7 +659,8 @@ class Fitter:
                         break
                 else:
                     if self.getDiagnosticLevel() > 0:
-                        print("Fit Geometry:  Warning: Cannot project data for group " + groupName + " as no matching mesh group")
+                        if group != self._markerGroup:
+                            print("Warning: Cannot project data for group " + groupName + " as no matching mesh group")
                     continue
                 meshLocation = self._dataProjectionLocationFields[dimension - 1]
                 dataProjectionNodesetGroup = self._dataProjectionNodesetGroups[dimension - 1]
@@ -513,10 +669,10 @@ class Fitter:
                 fieldcache.setNode(node)
                 if not self._dataCoordinatesField.isDefinedAtLocation(fieldcache):
                     if self.getDiagnosticLevel() > 0:
-                        print("Fit Geometry:  Warning: Cannot project data for group " + groupName + " as field " + self._dataCoordinatesField.getName() + " is not defined on data")
+                        print("Warning: Cannot project data for group " + groupName + " as field " + self._dataCoordinatesField.getName() + " is not defined on data")
                     continue
                 if not meshLocation.isDefinedAtLocation(fieldcache):
-                    # define meshLocation and on data Group:
+                    # define meshLocation and dataProjectionDirectionField on data Group:
                     nodetemplate = datapoints.createNodetemplate()
                     nodetemplate.defineField(meshLocation)
                     nodetemplate.defineField(self._dataProjectionDirectionField)
@@ -525,26 +681,7 @@ class Fitter:
                         #print("node",node.getIdentifier(),"result",result)
                         node = nodeIter.next()
                     del nodetemplate
-                    # restart iteration
-                    nodeIter = dataGroup.createNodeiterator()
-                    node = nodeIter.next()
-                findMeshLocation = self._fieldmodule.createFieldFindMeshLocation(self._dataCoordinatesField, self._modelCoordinatesField, meshGroup)
-                findMeshLocation.setSearchMode(FieldFindMeshLocation.SEARCH_MODE_NEAREST)
-                while node.isValid():
-                    fieldcache.setNode(node)
-                    element, xi = findMeshLocation.evaluateMeshLocation(fieldcache, dimension)
-                    if not element.isValid():
-                        print("Fit Geometry:  Error finding data projection nearest mesh location for group " + groupName + ". Aborting group.")
-                        break
-                    result = meshLocation.assignMeshLocation(fieldcache, element, xi)
-                    #print(result, "node", node.getIdentifier(), "element", element.getIdentifier(), "xi", xi)
-                    #if result != RESULT_OK:
-                    #    mesh = meshLocation.getMesh()
-                    #    print("--> mesh", mesh.isValid(), mesh.getDimension(), findMeshLocation.getMesh().getDimension())
-                    #    print("node", node.getIdentifier(), "is defined", meshLocation.isDefinedAtLocation(fieldcache))
-                    assert result == RESULT_OK, "Fit Geometry:  Failed to assign data projection mesh location for group " + groupName
-                    dataProjectionNodesetGroup.addNode(node)
-                    node = nodeIter.next()
+                self.calculateGroupDataProjections(fieldcache, group, dataGroup, meshGroup, meshLocation, activeFitterStepConfig)
 
             # Store data projection directions
             for dimension in range(1, 3):
@@ -555,7 +692,8 @@ class Fitter:
                     fieldassignment.setNodeset(nodesetGroup)
                     result = fieldassignment.assign()
                     assert result in [ RESULT_OK, RESULT_WARNING_PART_DONE ], \
-                        "Fit Geometry:  Failed to assign data projection directions for dimension " + str(dimension)
+                        "Error:  Failed to assign data projection directions for dimension " + str(dimension)
+                    del fieldassignment
 
             if self.getDiagnosticLevel() > 0:
                 # Warn about unprojected points
@@ -569,25 +707,7 @@ class Fitter:
                 del unprojectedDatapoints
 
             # remove temporary objects before ChangeManager exits
-            del findMeshLocation
             del fieldcache
-
-    def _addFitterStep(self, fitterStep):
-        self._fitterSteps.append(fitterStep)
-
-    def _removeFitterStep(self, fitterStep):
-        self._fitterSteps.remove(fitterStep)
-
-    def getNextFitterStep(self, refFitterStep):
-        """
-        Return next fitter step after refFitterStep, or before if last, otherwise None.
-        """
-        index = self._fitterSteps.index(refFitterStep) + 1
-        if index >= len(self._fitterSteps):
-            index -= 2
-        if index < 0:
-            return None
-        return self._fitterSteps[index]
 
     def getDataProjectionDirectionField(self):
         return self._dataProjectionDirectionField
@@ -702,42 +822,3 @@ class Fitter:
         sr = sir.createStreamresourceFile(fileName)
         sir.setResourceDomainTypes(sr, Field.DOMAIN_TYPE_DATAPOINTS)
         self._region.write(sir)
-
-
-class FitterStep:
-    """
-    Base class for fitter steps.
-    """
-
-    def __init__(self, fitter : Fitter):
-        """
-        Construct and add to Fitter.
-        """
-        self._fitter = fitter
-        fitter._addFitterStep(self)
-        self._hasRun = False
-
-    def destroy(self):
-        """
-        Remove from Fitter.
-        """
-        self._fitter._removeFitterStep(self)
-        self._fitter = None
-
-    def getFitter(self):
-        return self._fitter
-
-    def hasRun(self):
-        return self._hasRun
-
-    def setHasRun(self, hasRun):
-        self._hasRun = hasRun
-
-    def getDiagnosticLevel(self):
-        return self._fitter.getDiagnosticLevel()
-
-    def run(self):
-        """
-        Override to perform action of derived FitStep
-        """
-        pass
