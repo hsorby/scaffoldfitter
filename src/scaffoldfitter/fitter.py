@@ -25,6 +25,7 @@ class Fitter:
         self._zincModelFileName = zincModelFileName
         self._zincDataFileName = zincDataFileName
         self._context = Context("Scaffoldfitter")
+        #self._logger = self._context.getLogger()
         self._region = None
         self._rawDataRegion = None
         self._fieldmodule = None
@@ -34,6 +35,7 @@ class Fitter:
         self._dataCoordinatesField = None
         self._dataCoordinatesFieldName = None
         self._mesh = []  # [dimension - 1]
+        self._dataProjectionGroupNames = []  # list of group names with data point projections defined
         self._dataProjectionLocationFields = [ ]  # [dimension - 1]
         self._dataProjectionCoordinatesFields = [ ]  # [dimension - 1]
         self._dataProjectionDeltaFields = [ ]  # [dimension - 1]
@@ -545,6 +547,7 @@ class Fitter:
             self.setModelCoordinatesField(field)
 
     def _defineDataProjectionFields(self):
+        self._dataProjectionGroupNames = []
         self._dataProjectionLocationFields = []
         self._dataProjectionCoordinatesFields = []
         self._dataProjectionDeltaFields = []
@@ -619,11 +622,6 @@ class Fitter:
             element, xi = findMeshLocation.evaluateMeshLocation(fieldcache, dimension)
             if element.isValid():
                 result = meshLocation.assignMeshLocation(fieldcache, element, xi)
-                #print(result, "node", node.getIdentifier(), "element", element.getIdentifier(), "xi", xi)
-                #if result != RESULT_OK:
-                #    mesh = meshLocation.getMesh()
-                #    print("--> mesh", mesh.isValid(), mesh.getDimension(), findMeshLocation.getMesh().getDimension())
-                #    print("node", node.getIdentifier(), "is defined", meshLocation.isDefinedAtLocation(fieldcache))
                 assert result == RESULT_OK, "Error: Failed to assign data projection mesh location for group " + groupName
                 dataProjectionNodesetGroup.addNode(node)
             node = nodeIter.next()
@@ -664,18 +662,19 @@ class Fitter:
                     continue
                 meshLocation = self._dataProjectionLocationFields[dimension - 1]
                 dataProjectionNodesetGroup = self._dataProjectionNodesetGroups[dimension - 1]
-                nodeIter = dataGroup.createNodeiterator()
-                node = nodeIter.next()
-                fieldcache.setNode(node)
-                if not self._dataCoordinatesField.isDefinedAtLocation(fieldcache):
-                    if self.getDiagnosticLevel() > 0:
-                        print("Warning: Cannot project data for group " + groupName + " as field " + self._dataCoordinatesField.getName() + " is not defined on data")
-                    continue
-                if not meshLocation.isDefinedAtLocation(fieldcache):
+                if groupName not in self._dataProjectionGroupNames:
+                    self._dataProjectionGroupNames.append(groupName)  # so only define mesh location, or warn once
+                    fieldcache.setNode(dataGroup.createNodeiterator().next())
+                    if not self._dataCoordinatesField.isDefinedAtLocation(fieldcache):
+                        if self.getDiagnosticLevel() > 0:
+                            print("Warning: Cannot project data for group " + groupName + " as field " + self._dataCoordinatesField.getName() + " is not defined on data")
+                        continue
                     # define meshLocation and dataProjectionDirectionField on data Group:
                     nodetemplate = datapoints.createNodetemplate()
                     nodetemplate.defineField(meshLocation)
                     nodetemplate.defineField(self._dataProjectionDirectionField)
+                    nodeIter = dataGroup.createNodeiterator()
+                    node = nodeIter.next()
                     while node.isValid():
                         result = node.merge(nodetemplate)
                         #print("node",node.getIdentifier(),"result",result)
