@@ -3,9 +3,11 @@ Fit step for gross alignment and scale.
 """
 
 import copy
-from opencmiss.utils.zinc.field import assignFieldParameters, create_field_euler_angles_rotation_matrix
-from opencmiss.utils.zinc.finiteelement import getNodeNameCentres
+from opencmiss.utils.maths.vectorops import div
+from opencmiss.utils.zinc.field import assignFieldParameters, get_group_list, create_field_euler_angles_rotation_matrix
+from opencmiss.utils.zinc.finiteelement import evaluate_field_nodeset_mean, getNodeNameCentres
 from opencmiss.utils.zinc.general import ChangeManager
+from opencmiss.zinc.element import Mesh
 from opencmiss.zinc.field import Field
 from opencmiss.zinc.optimisation import Optimisation
 from opencmiss.zinc.result import RESULT_OK, RESULT_WARNING_PART_DONE
@@ -52,6 +54,7 @@ class FitterStepAlign(FitterStep):
 
     def __init__(self):
         super(FitterStepAlign, self).__init__()
+        self._alignGroups = False
         self._alignMarkers = False
         self._rotation = [ 0.0, 0.0, 0.0 ]
         self._scale = 1.0
@@ -66,6 +69,7 @@ class FitterStepAlign(FitterStep):
         Decode definition of step from JSON dict.
         """
         assert self._jsonTypeId in dct
+        self._alignGroups = dct["alignGroups"]
         self._alignMarkers = dct["alignMarkers"]
         self._rotation = dct["rotation"]
         self._scale = dct["scale"]
@@ -78,17 +82,35 @@ class FitterStepAlign(FitterStep):
         """
         return {
             self._jsonTypeId : True,
+            "alignGroups" : self._alignGroups,
             "alignMarkers" : self._alignMarkers,
             "rotation" : self._rotation,
             "scale" : self._scale,
             "translation" : self._translation
             }
 
+    def isAlignGroups(self):
+        return self._alignGroups
+
+    def setAlignGroups(self, alignGroups):
+        """
+        Set whether alignment includes mapping mean position of annotation
+        groups in model to mean position of data for that group.
+        :param alignGroups: True to automatically align to groups, otherwise False.
+        :return: True if state changed, otherwise False.
+        """
+        if alignGroups != self._alignGroups:
+            self._alignGroups = alignGroups
+            return True
+        return False
+
     def isAlignMarkers(self):
         return self._alignMarkers
 
     def setAlignMarkers(self, alignMarkers):
         """
+        Set whether alignment includes mapping model marker positions
+        to data marker positions.
         :param alignMarkers: True to automatically align to markers, otherwise False.
         :return: True if state changed, otherwise False.
         """
@@ -147,8 +169,8 @@ class FitterStepAlign(FitterStep):
         """
         modelCoordinates = self._fitter.getModelCoordinatesField()
         assert modelCoordinates, "Align:  Missing model coordinates"
-        if self._alignMarkers:
-            self._doAlignMarkers()
+        if self._alignGroups or self._alignMarkers:
+            self._doAutoAlign()
         fieldmodule = self._fitter._fieldmodule
         with ChangeManager(fieldmodule):
             # rotate, scale and translate model
@@ -163,55 +185,76 @@ class FitterStepAlign(FitterStep):
         self._fitter.calculateDataProjections(self)
         self.setHasRun(True)
 
-    def _doAlignMarkers(self):
+    def _doAutoAlign(self):
         """
-        Prepare and invoke alignment to markers.
+        Perform auto alignment to groups and/or markers.
         """
-        fieldmodule = self._fitter._fieldmodule
-        markerGroup = self._fitter.getMarkerGroup()
-        assert markerGroup, "Align:  No marker group to align with"
-        markerPrefix = markerGroup.getName()
         modelCoordinates = self._fitter.getModelCoordinatesField()
         componentsCount = modelCoordinates.getNumberOfComponents()
+        pointMap = {}  # dict group/marker name -> (modelCoordinates, dataCoordinates)
 
-        markerNodeGroup, markerLocation, markerCoordinates, markerName = self._fitter.getMarkerModelFields()
-        assert markerNodeGroup and markerCoordinates and markerName, "Align:  No marker group, coordinates or name fields"
-        modelMarkers = getNodeNameCentres(markerNodeGroup, markerCoordinates, markerName)
+        if self._alignGroups:
+            fieldmodule = self._fitter._fieldmodule
+            datapoints = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
+            dataCoordinates = self._fitter.getDataCoordinatesField()
+            groups = get_group_list(fieldmodule)
+            for group in groups:
+                dataGroup = self._fitter.getGroupDataProjectionNodesetGroup(group)
+                if not dataGroup:
+                    continue
+                meshGroup = self._fitter.getGroupDataProjectionMeshGroup(group)
+                if not meshGroup:
+                    continue
+                groupName = group.getName()
+                with ChangeManager(fieldmodule):
+                    meanDataCoordinates = evaluate_field_nodeset_mean(dataCoordinates, dataGroup)
+                    coordinates_integral = evaluate_field_mesh_integral(modelCoordinates, modelCoordinates, meshGroup)
+                    mass = evaluate_field_mesh_integral(fieldmodule.createFieldConstant(1.0), modelCoordinates, meshGroup)
+                    meanModelCoordinates = div(coordinates_integral, mass)
+                    pointMap[groupName] = ( meanModelCoordinates, meanDataCoordinates )
 
-        markerDataGroup, markerDataCoordinates, markerDataName = self._fitter.getMarkerDataFields()
-        assert markerDataGroup and markerDataCoordinates and markerDataName, "Align:  No marker data group, coordinates or name fields"
-        dataMarkers = getNodeNameCentres(markerDataGroup, markerDataCoordinates, markerDataName)
+        if self._alignMarkers:
+            markerGroup = self._fitter.getMarkerGroup()
+            assert markerGroup, "Align:  No marker group to align with"
+            markerPrefix = markerGroup.getName()
 
-        # match model and data markers, warn of unmatched markers
-        markerMap = {}
-        writeDiagnostics = self.getDiagnosticLevel() > 0
-        for modelName in modelMarkers:
-            # name match allows case and whitespace differences
-            matchName = modelName.strip().casefold()
-            for dataName in dataMarkers:
-                if dataName.strip().casefold() == matchName:
-                    markerMap[modelName] = ( modelMarkers[modelName], dataMarkers[dataName] )
+            markerNodeGroup, markerLocation, markerCoordinates, markerName = self._fitter.getMarkerModelFields()
+            assert markerNodeGroup and markerCoordinates and markerName, "Align:  No marker group, coordinates or name fields"
+            modelMarkers = getNodeNameCentres(markerNodeGroup, markerCoordinates, markerName)
+
+            markerDataGroup, markerDataCoordinates, markerDataName = self._fitter.getMarkerDataFields()
+            assert markerDataGroup and markerDataCoordinates and markerDataName, "Align:  No marker data group, coordinates or name fields"
+            dataMarkers = getNodeNameCentres(markerDataGroup, markerDataCoordinates, markerDataName)
+
+            # match model and data markers, warn of unmatched markers
+            writeDiagnostics = self.getDiagnosticLevel() > 0
+            for modelName in modelMarkers:
+                # name match allows case and whitespace differences
+                matchName = modelName.strip().casefold()
+                for dataName in dataMarkers:
+                    if dataName.strip().casefold() == matchName:
+                        pointMap[modelName] = ( modelMarkers[modelName], dataMarkers[dataName] )
+                        if writeDiagnostics:
+                            print("Align:  Model marker '" + modelName + "' found in data" + (" as '" + dataName +"'" if (dataName != modelName) else ""))
+                            dataMarkers.pop(dataName)
+                        break
+                else:
                     if writeDiagnostics:
-                        print("Align:  Model marker '" + modelName + "' found in data" + (" as '" + dataName +"'" if (dataName != modelName) else ""))
-                        dataMarkers.pop(dataName)
-                    break
-            else:
-                if writeDiagnostics:
-                    print("Align:  Model marker '" + modelName + "' not found in data")
-        if writeDiagnostics:
-            for dataName in dataMarkers:
-                print("Align:  Data marker '" + dataName + "' not found in model")
+                        print("Align:  Model marker '" + modelName + "' not found in data")
+            if writeDiagnostics:
+                for dataName in dataMarkers:
+                    print("Align:  Data marker '" + dataName + "' not found in model")
 
-        self._optimiseAlignment(markerMap)
+        self._optimiseAlignment(pointMap)
 
-    def _optimiseAlignment(self, markerMap):
+    def _optimiseAlignment(self, pointMap):
         """
         Calculate transformation from modelCoordinates to dataMarkers
         over the markers, by scaling, translating and rotating model.
         On success, sets transformation parameters in object.
-        :param markerMap: dict name -> (modelCoordinates, dataCoordinates)
+        :param pointMap: dict name -> (modelCoordinates, dataCoordinates)
         """
-        assert len(markerMap) >= 3, "Align:  Only " + str(len(markerMap)) + " markers - need at least 3"
+        assert len(pointMap) >= 3, "Align:  Only " + str(len(pointMap)) + " points - need at least 3"
         region = self._fitter._context.createRegion()
         fieldmodule = region.getFieldmodule()
         dataScale = self._fitter.getDataScale()
@@ -223,7 +266,7 @@ class FitterStepAlign(FitterStep):
             nodetemplate.defineField(modelCoordinates)
             nodetemplate.defineField(dataCoordinates)
             fieldcache = fieldmodule.createFieldcache()
-            for name, positions in markerMap.items():
+            for name, positions in pointMap.items():
                 modelx = positions[0]
                 datax = positions[1]
                 node = nodes.createNode(-1, nodetemplate)
@@ -295,3 +338,25 @@ class FitterStepAlign(FitterStep):
         result3, self._translation = translation.evaluateReal(fieldcache, 3)
         self._translation = [ s*dataScale for s in self._translation ]
         assert (result1 == RESULT_OK) and (result2 == RESULT_OK) and (result3 == RESULT_OK), "Align:  Failed to evaluate transformation for alignment to markers"
+
+
+def evaluate_field_mesh_integral(field : Field, coordinates : Field, mesh: Mesh, number_of_points = 4):
+    """
+    Integrate value of a field over mesh using Gaussian Quadrature.
+    :param field: Field to integrate over mesh.
+    :param coordinates: Field giving spatial coordinates to integrate over.
+    :param mesh: The mesh or mesh group to integrate over.
+    :param number_of_points: Number of integration points in each dimension.
+    :return: Integral value.
+    """
+    fieldmodule = mesh.getFieldmodule()
+    components_count = field.getNumberOfComponents()
+    with ChangeManager(fieldmodule):
+        integral = fieldmodule.createFieldMeshIntegral(field, coordinates, mesh)
+        integral.setNumbersOfPoints(number_of_points)
+        fieldcache = fieldmodule.createFieldcache()
+        result, value = integral.evaluateReal(fieldcache, components_count)
+        del integral
+        del fieldcache
+    assert result == RESULT_OK
+    return value

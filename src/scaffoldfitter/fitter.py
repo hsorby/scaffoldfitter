@@ -631,6 +631,30 @@ class Fitter:
                 print("Warning: Only " + str(pointsProjected) + " of " + str(dataGroup.getSize()) + " data points projected for group " + groupName)
         return 
 
+    def getGroupDataProjectionNodesetGroup(self, group : FieldGroup):
+        '''
+        :return: Data NodesetGroup containing points for projection of group, otherwise None.
+        '''
+        datapoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
+        dataGroupField = group.getFieldNodeGroup(datapoints)
+        if dataGroupField.isValid():
+            dataGroup = dataGroupField.getNodesetGroup()
+            if dataGroup.getSize() > 0:
+                return dataGroup
+        return None
+
+    def getGroupDataProjectionMeshGroup(self, group : FieldGroup):
+        '''
+        :return: 2D if not 1D meshGroup containing elements for projecting data in group, otherwise None.
+        '''
+        for dimension in range(2, 0, -1):
+            elementGroupField = group.getFieldElementGroup(self._mesh[dimension - 1])
+            if elementGroupField.isValid():
+                meshGroup = elementGroupField.getMeshGroup()
+                if meshGroup.getSize() > 0:
+                    return meshGroup
+        return None
+
     def calculateDataProjections(self, fitterStep : FitterStep):
         """
         Find projections of datapoints' coordinates onto model coordinates,
@@ -648,18 +672,16 @@ class Fitter:
             groups = getGroupList(self._fieldmodule)
             for group in groups:
                 groupName = group.getName()
-                dataGroup = group.getFieldNodeGroup(datapoints).getNodesetGroup()
-                if not dataGroup.isValid():
+                dataGroup = self.getGroupDataProjectionNodesetGroup(group)
+                if not dataGroup:
                     continue
-                for dimension in range(2, 0, -1):
-                    meshGroup = group.getFieldElementGroup(self._mesh[dimension - 1]).getMeshGroup()
-                    if meshGroup.isValid() and (meshGroup.getSize() > 0):
-                        break
-                else:
+                meshGroup = self.getGroupDataProjectionMeshGroup(group)
+                if not meshGroup:
                     if self.getDiagnosticLevel() > 0:
                         if group != self._markerGroup:
                             print("Warning: Cannot project data for group " + groupName + " as no matching mesh group")
                     continue
+                dimension = meshGroup.getDimension()
                 meshLocation = self._dataProjectionLocationFields[dimension - 1]
                 dataProjectionNodesetGroup = self._dataProjectionNodesetGroups[dimension - 1]
                 if groupName not in self._dataProjectionGroupNames:
