@@ -64,11 +64,14 @@ class FitterStepAlign(FitterStep):
     def getJsonTypeId(cls):
         return cls._jsonTypeId
 
-    def decodeSettingsJSONDict(self, dct : dict):
+    def decodeSettingsJSONDict(self, dctIn : dict):
         """
         Decode definition of step from JSON dict.
         """
-        assert self._jsonTypeId in dct
+        assert self._jsonTypeId in dctIn
+        # ensure all new options are in dct
+        dct = self.encodeSettingsJSONDict()
+        dct.update(dctIn)
         self._alignGroups = dct["alignGroups"]
         self._alignMarkers = dct["alignMarkers"]
         self._rotation = dct["rotation"]
