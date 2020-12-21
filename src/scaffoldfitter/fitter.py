@@ -260,10 +260,11 @@ class Fitter:
         self._discoverDataCoordinatesField()
         self._discoverMarkerGroup()
 
-    def run(self, endStep=None):
+    def run(self, endStep=None, modelFileNameStem=None):
         """
         Run either all remaining fitter steps or up to specified end step.
         :param endStep: Last fitter step to run, or None to run all.
+        :param modelFilename: Filename stem for writing intermediate model files.
         :return: True if reloaded (so scene changed), False if not.
         """
         if not endStep:
@@ -274,7 +275,7 @@ class Fitter:
             # re-load to get back to current state
             self.load()
             for index in range(1, endIndex + 1):
-                self._fitterSteps[index].run()
+                self._fitterSteps[index].run(modelFileNameStem + str(index) if modelFileNameStem else None)
             return True
         if endIndex == 0:
             endStep.run()  # force re-run initial config
@@ -282,7 +283,7 @@ class Fitter:
             # run from current point up to step
             for index in range(1, endIndex + 1):
                 if not self._fitterSteps[index].hasRun():
-                    self._fitterSteps[index].run()
+                    self._fitterSteps[index].run(modelFileNameStem + str(index) if modelFileNameStem else None)
         return False
 
     def getDataCoordinatesField(self):

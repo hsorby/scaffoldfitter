@@ -166,9 +166,10 @@ class FitterStepAlign(FitterStep):
             return True
         return False
 
-    def run(self):
+    def run(self, modelFileNameStem=None):
         """
         Perform align and scale.
+        :param modelFileNameStem: Optional name stem of intermediate output file to write.
         """
         modelCoordinates = self._fitter.getModelCoordinatesField()
         assert modelCoordinates, "Align:  Missing model coordinates"
@@ -186,6 +187,8 @@ class FitterStepAlign(FitterStep):
             del fieldassignment
             del modelCoordinatesTransformed
         self._fitter.calculateDataProjections(self)
+        if modelFileNameStem:
+            self._fitter.writeModel(modelFileNameStem + "_align.exf")
         self.setHasRun(True)
 
     def _doAutoAlign(self):
