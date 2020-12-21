@@ -33,8 +33,9 @@ class FitterStep:
     def getDiagnosticLevel(self):
         return self._fitter.getDiagnosticLevel()
 
-    def run(self):
+    def run(self, modelFileNameStem=None):
         """
         Override to perform action of derived FitStep
+        :param modelFileNameStem: Optional name stem of intermediate output file to write.
         """
         pass

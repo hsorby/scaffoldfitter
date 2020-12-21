@@ -52,9 +52,12 @@ class FitterStepConfig(FitterStep):
             return True
         return False
 
-    def run(self):
+    def run(self, modelFileNameStem=None):
         """
         Calculate data projections with current settings.
+        :param modelFileNameStem: Optional name stem of intermediate output file to write.
         """
         self._fitter.calculateDataProjections(self)
+        if modelFileNameStem:
+            self._fitter.writeModel(modelFileNameStem + "_config.exf")
         self.setHasRun(True)

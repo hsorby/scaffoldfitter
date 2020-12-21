@@ -15,6 +15,7 @@ class FitterStepFit(FitterStep):
 
     def __init__(self):
         super(FitterStepFit, self).__init__()
+        self._lineWeight = 10.0
         self._markerWeight = 1.0
         self._strainPenaltyWeight = 0.0
         self._curvaturePenaltyWeight = 0.0
@@ -35,6 +36,7 @@ class FitterStepFit(FitterStep):
         # ensure all new options are in dct
         dct = self.encodeSettingsJSONDict()
         dct.update(dctIn)
+        self._lineWeight = dct["lineWeight"]
         self._markerWeight = dct["markerWeight"]
         self._strainPenaltyWeight = dct["strainPenaltyWeight"]
         self._curvaturePenaltyWeight = dct["curvaturePenaltyWeight"]
@@ -50,6 +52,7 @@ class FitterStepFit(FitterStep):
         """
         return {
             self._jsonTypeId : True,
+            "lineWeight" : self._lineWeight,
             "markerWeight" : self._markerWeight,
             "strainPenaltyWeight" : self._strainPenaltyWeight,
             "curvaturePenaltyWeight" : self._curvaturePenaltyWeight,
@@ -58,6 +61,16 @@ class FitterStepFit(FitterStep):
             "maximumSubIterations" : self._maximumSubIterations,
             "updateReferenceState" : self._updateReferenceState
             }
+
+    def getLineWeight(self):
+        return self._lineWeight
+
+    def setLineWeight(self, weight):
+        assert weight >= 0.0
+        if weight != self._lineWeight:
+            self._lineWeight = weight
+            return True
+        return False
 
     def getMarkerWeight(self):
         return self._markerWeight
@@ -128,9 +141,10 @@ class FitterStepFit(FitterStep):
             return True
         return False
 
-    def run(self):
+    def run(self, modelFileNameStem=None):
         """
         Fit model geometry parameters to data.
+        :param modelFileNameStem: Optional name stem of intermediate output file to write.
         """
         fieldmodule = self._fitter._region.getFieldmodule()
         optimisation = fieldmodule.createOptimisation()
@@ -180,7 +194,7 @@ class FitterStepFit(FitterStep):
         with ChangeManager(fieldmodule):
             for dimension in range(1, 3):
                 if self._fitter.getDataProjectionNodesetGroup(dimension).getSize() > 0:
-                    dataProjectionObjective[dimension - 1] = self.createDataProjectionObjectiveField(dimension)
+                    dataProjectionObjective[dimension - 1] = self.createDataProjectionObjectiveField(dimension, self._lineWeight if (dimension == 1) else 1.0)
                     dataProjectionObjectiveComponentsCount[dimension - 1] = dataProjectionObjective[dimension - 1].getNumberOfComponents()
                     result = optimisation.addObjectiveField(dataProjectionObjective[dimension - 1])
                     assert result == RESULT_OK, "Fit Geometry:  Could not add data projection objective field for dimension " + str(dimension)
@@ -219,6 +233,8 @@ class FitterStepFit(FitterStep):
                 print(solutionReport)
             assert result == RESULT_OK, "Fit Geometry:  Optimisation failed with result " + str(result)
             self._fitter.calculateDataProjections(self)
+            if modelFileNameStem:
+                self._fitter.writeModel(modelFileNameStem + "_fit" + str(iter + 1) + ".exf")
         if self.getDiagnosticLevel() > 0:
             print("--------")
 
@@ -239,13 +255,14 @@ class FitterStepFit(FitterStep):
 
         self.setHasRun(True)
 
-    def createDataProjectionObjectiveField(self, dimension):
+    def createDataProjectionObjectiveField(self, dimension, weight):
         """
         Get FieldNodesetSumSquares objective for data projected onto mesh of dimension.
         Minimises length in projection direction, allowing sliding fit.
         Only call if self._fitter.getDataProjectionNodesetGroup().getSize() > 0
         Assumes ChangeManager(fieldmodule) is in effect.
         :param dimension: Mesh dimension 1 or 2.
+        :param weight: Real weight to multiply objective terms by.
         :return: Zinc FieldNodesetSumSquares.
         """
         fieldmodule = self._fitter.getFieldmodule()
@@ -254,7 +271,7 @@ class FitterStepFit(FitterStep):
         #dataProjectionInDirection = fieldmodule.createFieldDotProduct(dataProjectionDelta, self._fitter.getDataProjectionDirectionField())
         #dataProjectionInDirection = fieldmodule.createFieldMagnitude(dataProjectionDelta)
         #dataProjectionInDirection = dataProjectionDelta
-        dataProjectionInDirection = fieldmodule.createFieldConstant([ 1.0/dataScale ]*dataProjectionDelta.getNumberOfComponents()) * dataProjectionDelta
+        dataProjectionInDirection = fieldmodule.createFieldConstant([ weight/dataScale ]*dataProjectionDelta.getNumberOfComponents()) * dataProjectionDelta
         dataProjectionObjective = fieldmodule.createFieldNodesetSumSquares(dataProjectionInDirection, self._fitter.getDataProjectionNodesetGroup(dimension))
         return dataProjectionObjective
 
