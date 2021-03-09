@@ -74,8 +74,7 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fitter.setDiagnosticLevel(1)
         fitter.load()
         dataScale = fitter.getDataScale()
-        self.assertAlmostEqual(dataScale, 0.9958462809921166, delta=1.0E-7)
-        fitter._dataScale = 1.0  # to match previous test results
+        self.assertAlmostEqual(dataScale, 1.0, delta=1.0E-7)
 
         self.assertEqual(fitter.getModelCoordinatesField().getName(), "coordinates")
         self.assertEqual(fitter.getDataCoordinatesField().getName(), "data_coordinates")
@@ -118,8 +117,7 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fitter.setDiagnosticLevel(1)
         fitter.load()
         dataScale = fitter.getDataScale()
-        self.assertAlmostEqual(dataScale, 0.991338312625885, delta=1.0E-7)
-        fitter._dataScale = 1.0  # to match previous test results
+        self.assertAlmostEqual(dataScale, 1.0, delta=1.0E-7)
 
         coordinates = fitter.getModelCoordinatesField()
         self.assertEqual(coordinates.getName(), "coordinates")
@@ -161,7 +159,7 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fitter.addFitterStep(fit1)
         self.assertEqual(3, len(fitter.getFitterSteps()))
         fit1.setMarkerWeight(1.0)
-        fit1.setCurvaturePenaltyWeight(0.1)
+        fit1.setCurvaturePenaltyWeight(0.01)
         fit1.setNumberOfIterations(3)
         fit1.setUpdateReferenceState(True)
         fit1.run()
@@ -169,10 +167,10 @@ class FitCubeToSphereTestCase(unittest.TestCase):
 
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 3.1892231780263853, delta=1.0E-4)
+        self.assertAlmostEqual(surfaceArea, 3.18921662820759, delta=1.0E-4)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(volume, 0.5276229458448985, delta=1.0E-4)
+        self.assertAlmostEqual(volume, 0.5276212500499845, delta=1.0E-4)
 
         # test json serialisation
         s = fitter.encodeSettingsJSON()
