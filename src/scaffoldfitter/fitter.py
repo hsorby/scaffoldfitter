@@ -920,6 +920,7 @@ class Fitter:
         Write model nodes and elements excluding unmanaged fields to file.
         """
         sir = self._region.createStreaminformationRegion()
+        sir.setRecursionMode(sir.RECURSION_MODE_OFF)
         srf = sir.createStreamresourceFile(modelFileName)
         sir.setResourceFieldNames(srf, getManagedFieldNames(self._fieldmodule))
         sir.setResourceDomainTypes(srf, Field.DOMAIN_TYPE_NODES | Field.DOMAIN_TYPE_MESH1D | Field.DOMAIN_TYPE_MESH2D | Field.DOMAIN_TYPE_MESH3D)
@@ -928,6 +929,7 @@ class Fitter:
 
     def writeData(self, fileName):
         sir = self._region.createStreaminformationRegion()
+        sir.setRecursionMode(sir.RECURSION_MODE_OFF)
         sr = sir.createStreamresourceFile(fileName)
         sir.setResourceDomainTypes(sr, Field.DOMAIN_TYPE_DATAPOINTS)
         self._region.write(sir)

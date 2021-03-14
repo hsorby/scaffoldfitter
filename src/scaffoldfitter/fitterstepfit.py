@@ -206,32 +206,34 @@ class FitterStepFit(FitterStep):
                 #assert result == RESULT_OK, "Fit Geometry:  Could not add edge discontinuity penalty objective field"
 
         fieldcache = fieldmodule.createFieldcache()
+        objectiveFormat = "{:12e}"
         for iter in range(self._numberOfIterations):
+            iterName = str(iter + 1)
             if self.getDiagnosticLevel() > 0:
-                print("-------- Iteration", iter + 1)
+                print("-------- Iteration " + iterName)
             if self.getDiagnosticLevel() > 0:
                 result, objective = dataObjective.evaluateReal(fieldcache, 1)
-                print("    Data objective", objective)
+                print("    Data objective", objectiveFormat.format(objective))
                 if deformationPenaltyObjective:
                     result, objective = deformationPenaltyObjective.evaluateReal(fieldcache, deformationPenaltyObjective.getNumberOfComponents())
-                    print("    Deformation penalty objective", objective)
+                    print("    Deformation penalty objective", objectiveFormat.format(objective))
             result = optimisation.optimise()
             if self.getDiagnosticLevel() > 1:
                 solutionReport = optimisation.getSolutionReport()
                 print(solutionReport)
             assert result == RESULT_OK, "Fit Geometry:  Optimisation failed with result " + str(result)
-            self._fitter.calculateDataProjections(self)
             if modelFileNameStem:
-                self._fitter.writeModel(modelFileNameStem + "_fit" + str(iter + 1) + ".exf")
+                self._fitter.writeModel(modelFileNameStem + "_fit" + iterName + ".exf")
+            self._fitter.calculateDataProjections(self)
         if self.getDiagnosticLevel() > 0:
             print("--------")
 
         if self.getDiagnosticLevel() > 0:
             result, objective = dataObjective.evaluateReal(fieldcache, 1)
-            print("    END Data objective", objective)
+            print("    END Data objective", objectiveFormat.format(objective))
             if deformationPenaltyObjective:
                 result, objective = deformationPenaltyObjective.evaluateReal(fieldcache, deformationPenaltyObjective.getNumberOfComponents())
-                print("    END Deformation penalty objective", objective)
+                print("    END Deformation penalty objective", objectiveFormat.format(objective))
 
         if self._updateReferenceState:
             self._fitter.updateModelReferenceCoordinates()
