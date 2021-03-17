@@ -11,14 +11,20 @@ class FitterStepConfig(FitterStep):
 
     def __init__(self):
         super(FitterStepConfig, self).__init__()
-        # Example group data; include only groups and options in-use
+        # Example json serialisation within config step. Include only groups and options in-use
         # Note that these are model group names; data group names differing by
         # case or whitespace are set by Fitter to matching model names.
-        #self._groupSettings = {
-        #    "GROUPNAME" : {
-        #        "dataProportion" : 0.1  # proportion of group data points to include in fit 0.1 = 10%, null = cancel / use global setting
+        #"groupSettings": {
+        #    "GROUPNAME1" : {
+        #        "dataProportion" : 0.1
+        #        }
+        #    "GROUPNAME2" : {
+        #        "dataProportion" : null
         #        }
         #    }
+        # unlisted groups or groups without dataProportion inherit from earlier config step
+        # or back to initial global setting (1.0 in this case = include all points).
+        # null value cancels inherited dataProportion = go back to global setting.
         self._groupSettings = {}
         self._projectionCentreGroups = False
 
