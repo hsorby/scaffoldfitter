@@ -22,6 +22,7 @@ class FitterStepConfig(FitterStep):
         #        "dataProportion" : null
         #        }
         #    }
+        # The first group GROUPNAME1 uses only 0.1 = 10% of the data points.
         # unlisted groups or groups without dataProportion inherit from earlier config step
         # or back to initial global setting (1.0 in this case = include all points).
         # null value cancels inherited dataProportion = go back to global setting.
