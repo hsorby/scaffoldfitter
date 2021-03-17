@@ -18,11 +18,8 @@ def decodeJSONFitterSteps(fitter : Fitter, dct):
     """
     for FitterStepType in [ FitterStepAlign, FitterStepConfig, FitterStepFit ]:
         if FitterStepType.getJsonTypeId() in dct:
-            if (FitterStepType is FitterStepConfig) and (len(fitter.getFitterSteps()) == 1):
-                fitterStep = fitter.getInitialFitterStepConfig()
-            else:
-                fitterStep = FitterStepType()
-                fitter.addFitterStep(fitterStep)
+            fitterStep = FitterStepType()
+            fitter.addFitterStep(fitterStep)
             fitterStep.decodeSettingsJSONDict(dct)
             return fitterStep
     return dct

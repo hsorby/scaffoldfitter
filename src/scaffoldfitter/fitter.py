@@ -59,12 +59,7 @@ class Fitter:
         self._markerDataLocationGroupField = None
         self._markerDataLocationGroup = None
         self._diagnosticLevel = 0
-        self._resetFitterSteps()
-
-    def _resetFitterSteps(self):
-        """
-        Reset fitterSteps to have one default initial FitterStepConfig - which can never be removed
-        """
+        # must always have an initial FitterStepConfig - which can never be removed
         self._fitterSteps = []
         fitterStep = FitterStepConfig()
         self.addFitterStep(fitterStep)
@@ -75,14 +70,20 @@ class Fitter:
         :param s: String of JSON encoded Fitter settings.
         :param decoder: decodeJSONFitterSteps(fitter, dct) for decodings FitterSteps.
         """
-        self._resetFitterSteps()
+        # clear fitter steps and load from json; assert later that there is an initial config step
+        oldFitterSteps = self._fitterSteps
+        self._fitterSteps = []
         dct = json.loads(s, object_hook=lambda dct: decoder(self, dct))
-        self._modelCoordinatesFieldName = dct["modelCoordinatesField"]
-        self._dataCoordinatesFieldName = dct["dataCoordinatesField"]
-        self._markerGroupName = dct["markerGroup"]
-        self._diagnosticLevel = dct["diagnosticLevel"]
-        # self._fitterSteps will already be populated by decoder so don't need
-        #self._fitterSteps = dct["fitterSteps"]
+        # self._fitterSteps will already be populated by decoder
+        # ensure there is a first config step:
+        if (len(self._fitterSteps) > 0) and isinstance(self._fitterSteps[0], FitterStepConfig):
+            self._modelCoordinatesFieldName = dct["modelCoordinatesField"]
+            self._dataCoordinatesFieldName = dct["dataCoordinatesField"]
+            self._markerGroupName = dct["markerGroup"]
+            self._diagnosticLevel = dct["diagnosticLevel"]
+        else:
+            self._fitterSteps = oldFitterSteps
+            assert False, "Missing initial config step"
 
     def encodeSettingsJSON(self) -> str:
         """
@@ -102,6 +103,16 @@ class Fitter:
         Get first fitter step which must exist and be a FitterStepConfig.
         """
         return self._fitterSteps[0]
+
+    def getInheritFitterStepConfig(self, refFitterStep : FitterStep):
+        """
+        Get last FitterStepConfig applicable to refFitterStep or None if
+        refFitterStep is the first.
+        """
+        for index in range(self._fitterSteps.index(refFitterStep) - 1, -1, -1):
+            if isinstance(self._fitterSteps[index], FitterStepConfig):
+                return self._fitterSteps[index]
+        return None
 
     def getActiveFitterStepConfig(self, refFitterStep : FitterStep):
         """
@@ -230,8 +241,8 @@ class Fitter:
             self._dataErrorField.setName(getUniqueFieldName(self._fieldmodule, "data_error"))
             # store weights per-point so can maintain variable weights by for marker and data by group, dimension of host
             self._dataWeightField = findOrCreateFieldFiniteElement(self._fieldmodule, "data_weight", components_count=1)
-            self._activeGroup = findOrCreateFieldGroup(self._fieldmodule, "active_data");
-            self._activeDataNodesetGroup = findOrCreateFieldNodeGroup(self._activeGroup, datapoints).getNodesetGroup();
+            self._activeDataGroup = findOrCreateFieldGroup(self._fieldmodule, "active_data");
+            self._activeDataNodesetGroup = findOrCreateFieldNodeGroup(self._activeDataGroup, datapoints).getNodesetGroup();
 
     def _loadData(self):
         """
@@ -671,6 +682,9 @@ class Fitter:
         dataProjectionNodesetGroup = self._dataProjectionNodesetGroups[dimension - 1]
         sizeBefore = dataProjectionNodesetGroup.getSize()
         dataCoordinates = self._dataCoordinatesField
+        dataProportion = activeFitterStepConfig.getGroupDataProportion(groupName)[0]
+        if not dataProportion:
+            dataProportion = 1.0
         if activeFitterStepConfig.isProjectionCentreGroups():
             # get geometric centre of dataGroup
             dataCentreField = self._fieldmodule.createFieldNodesetMean(dataCoordinates, dataGroup)
@@ -702,13 +716,17 @@ class Fitter:
         findLocation.setSearchMode(FieldFindMeshLocation.SEARCH_MODE_NEAREST)
         nodeIter = dataGroup.createNodeiterator()
         node = nodeIter.next()
+        dataProportionCounter = 0.5
         while node.isValid():
-            fieldcache.setNode(node)
-            element, xi = findLocation.evaluateMeshLocation(fieldcache, highestDimension)
-            if element.isValid():
-                result = meshLocation.assignMeshLocation(fieldcache, element, xi)
-                assert result == RESULT_OK, "Error: Failed to assign data projection mesh location for group " + groupName
-                dataProjectionNodesetGroup.addNode(node)
+            dataProportionCounter += dataProportion
+            if dataProportionCounter >= 1.0:
+                dataProportionCounter -= 1.0
+                fieldcache.setNode(node)
+                element, xi = findLocation.evaluateMeshLocation(fieldcache, highestDimension)
+                if element.isValid():
+                    result = meshLocation.assignMeshLocation(fieldcache, element, xi)
+                    assert result == RESULT_OK, "Error: Failed to assign data projection mesh location for group " + groupName
+                    dataProjectionNodesetGroup.addNode(node)
             node = nodeIter.next()
         pointsProjected = dataProjectionNodesetGroup.getSize() - sizeBefore
         if pointsProjected < dataGroup.getSize():
@@ -763,6 +781,8 @@ class Fitter:
                 self._dataProjectionNodesetGroups[d].removeAllNodes()
             groups = getGroupList(self._fieldmodule)
             for group in groups:
+                if group == self._activeDataGroup:
+                    continue
                 groupName = group.getName()
                 dataGroup = self.getGroupDataProjectionNodesetGroup(group)
                 if not dataGroup:

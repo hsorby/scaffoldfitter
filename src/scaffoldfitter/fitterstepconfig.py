@@ -11,6 +11,15 @@ class FitterStepConfig(FitterStep):
 
     def __init__(self):
         super(FitterStepConfig, self).__init__()
+        # Example group data; include only groups and options in-use
+        # Note that these are model group names; data group names differing by
+        # case or whitespace are set by Fitter to matching model names.
+        #self._groupSettings = {
+        #    "GROUPNAME" : {
+        #        "dataProportion" : 0.1  # proportion of group data points to include in fit 0.1 = 10%, null = cancel / use global setting
+        #        }
+        #    }
+        self._groupSettings = {}
         self._projectionCentreGroups = False
 
     @classmethod
@@ -25,6 +34,7 @@ class FitterStepConfig(FitterStep):
         # ensure all new options are in dct
         dct = self.encodeSettingsJSONDict()
         dct.update(dctIn)
+        self._groupSettings = dct["groupSettings"]
         self._projectionCentreGroups = dct["projectionCentreGroups"]
 
     def encodeSettingsJSONDict(self) -> dict:
@@ -34,8 +44,66 @@ class FitterStepConfig(FitterStep):
         """
         return {
             self._jsonTypeId : True,
+            "groupSettings" : self._groupSettings,
             "projectionCentreGroups" : self._projectionCentreGroups
             }
+
+    def getGroupSettingsNames(self):
+        """
+        :return:  List of names of groups settings are held for.
+        """
+        return list(self._groupSettings.keys())
+
+    def clearGroupSettings(self, groupName):
+        """
+        Clear all local settings for group so fall back to last config
+        settings or global defaults.
+        :param groupName:  Exact model group name.
+        """
+        groupSettings = self._groupSettings.pop(groupName, None)
+
+    def clearGroupDataProportion(self, groupName):
+        """
+        Clear local group data proportion so fall back to last config or global default.
+        :param groupName:  Exact model group name.
+        """
+        groupSettings = self._groupSettings.get(groupName)
+        if groupSettings:
+            groupSettings.pop("dataProportion", None)
+            if len(groupSettings) == 0:
+                self._groupSettings.pop(groupName)
+
+    def getGroupDataProportion(self, groupName):
+        """
+        Get proportion of group data points to include in fit, or None to
+        use global default.
+        :param groupName:  Exact model group name.
+        :return:  Proportion, isLocallySet. Proportion is either a value from
+        0.0 to 1.0, where 0.1 = 10%, or None if using global value (1.0).
+        The second return value is True if the value is set locally.
+        """
+        groupSettings = self._groupSettings.get(groupName)
+        if groupSettings:
+            proportion = groupSettings.get("dataProportion", "INHERIT")
+            if proportion != "INHERIT":
+                return proportion, True
+        inheritConfigStep = self.getFitter().getInheritFitterStepConfig(self)
+        proportion = inheritConfigStep.getGroupDataProportion(groupName)[0] if inheritConfigStep else None
+        return proportion, False
+
+    def setGroupDataProportion(self, groupName, proportion):
+        """
+        Set proportion of group data points to include in fit, or force
+        return to global default.
+        :param groupName:  Exact model group name.
+        :param proportion:  Float valued proportion from 0.0 (0%) to 1.0 (100%),
+        or None to force used of global default. Asserts value is valid.
+        """
+        assert (proportion is None) or (isinstance(proportion, float) and (0.0 <= proportion <= 1.0)), "FitterStepConfig: Invalid group data proportion"
+        groupSettings = self._groupSettings.get(groupName)
+        if not groupSettings:
+            groupSettings = self._groupSettings[groupName] = {}
+        groupSettings["dataProportion"] = proportion
 
     def isProjectionCentreGroups(self):
         return self._projectionCentreGroups
