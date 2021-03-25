@@ -225,10 +225,9 @@ class FitterStepFit(FitterStep):
             if modelFileNameStem:
                 self._fitter.writeModel(modelFileNameStem + "_fit" + iterName + ".exf")
             self._fitter.calculateDataProjections(self)
-        if self.getDiagnosticLevel() > 0:
-            print("--------")
 
         if self.getDiagnosticLevel() > 0:
+            print("--------")
             result, objective = dataObjective.evaluateReal(fieldcache, 1)
             print("    END Data objective", objectiveFormat.format(objective))
             if deformationPenaltyObjective:
