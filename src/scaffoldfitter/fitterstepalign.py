@@ -295,9 +295,9 @@ class FitterStepAlign(FitterStep):
         optimisation.setMethod(Optimisation.METHOD_LEAST_SQUARES_QUASI_NEWTON)
         #optimisation.setMethod(Optimisation.METHOD_QUASI_NEWTON)
         optimisation.addObjectiveField(objective)
-        optimisation.addIndependentField(rotation)
-        optimisation.addIndependentField(scale)
-        optimisation.addIndependentField(translation)
+        optimisation.addDependentField(rotation)
+        optimisation.addDependentField(scale)
+        optimisation.addDependentField(translation)
 
         #FunctionTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_FUNCTION_TOLERANCE)
         #GradientTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_GRADIENT_TOLERANCE)

@@ -146,10 +146,12 @@ class FitterStepFit(FitterStep):
         Fit model geometry parameters to data.
         :param modelFileNameStem: Optional name stem of intermediate output file to write.
         """
+        self._fitter.assignDataWeights(self._lineWeight, self._markerWeight);
+
         fieldmodule = self._fitter._region.getFieldmodule()
         optimisation = fieldmodule.createOptimisation()
-        optimisation.setMethod(Optimisation.METHOD_LEAST_SQUARES_QUASI_NEWTON)
-        optimisation.addIndependentField(self._fitter.getModelCoordinatesField())
+        optimisation.setMethod(Optimisation.METHOD_NEWTON)
+        optimisation.addDependentField(self._fitter.getModelCoordinatesField())
         optimisation.setAttributeInteger(Optimisation.ATTRIBUTE_MAXIMUM_ITERATIONS, self._maximumSubIterations)
 
         #FunctionTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_FUNCTION_TOLERANCE)
@@ -186,142 +188,107 @@ class FitterStepFit(FitterStep):
         #    print("Linesearch Tolerance", LinesearchTolerance)
         #    print("Trust Region Size", TrustRegionSize)
 
-        dataProjectionObjective = [ None, None ]
-        dataProjectionObjectiveComponentsCount = [ 0, 0 ]
-        markerObjectiveField = None
+        dataObjective = None
         deformationPenaltyObjective = None
         edgeDiscontinuityPenaltyObjective = None
         with ChangeManager(fieldmodule):
-            for dimension in range(1, 3):
-                if self._fitter.getDataProjectionNodesetGroup(dimension).getSize() > 0:
-                    dataProjectionObjective[dimension - 1] = self.createDataProjectionObjectiveField(dimension, self._lineWeight if (dimension == 1) else 1.0)
-                    dataProjectionObjectiveComponentsCount[dimension - 1] = dataProjectionObjective[dimension - 1].getNumberOfComponents()
-                    result = optimisation.addObjectiveField(dataProjectionObjective[dimension - 1])
-                    assert result == RESULT_OK, "Fit Geometry:  Could not add data projection objective field for dimension " + str(dimension)
-            if self._fitter.getMarkerGroup() and self._fitter.getMarkerDataLocationNodesetGroup() and \
-                    (self._fitter.getMarkerDataLocationNodesetGroup().getSize() > 0) and (self._markerWeight > 0.0):
-                markerObjectiveField = self.createMarkerObjectiveField(self._markerWeight)
-                result = optimisation.addObjectiveField(markerObjectiveField)
-                assert result == RESULT_OK, "Fit Geometry:  Could not add marker objective field"
+            dataObjective = self.createDataObjectiveField()
+            result = optimisation.addObjectiveField(dataObjective)
+            assert result == RESULT_OK, "Fit Geometry:  Could not add data objective field"
             if (self._strainPenaltyWeight > 0.0) or (self._curvaturePenaltyWeight > 0.0):
                 deformationPenaltyObjective = self.createDeformationPenaltyObjectiveField()
                 result = optimisation.addObjectiveField(deformationPenaltyObjective)
                 assert result == RESULT_OK, "Fit Geometry:  Could not add strain/curvature penalty objective field"
             if self._edgeDiscontinuityPenaltyWeight > 0.0:
-                edgeDiscontinuityPenaltyObjective = self.createEdgeDiscontinuityPenaltyObjectiveField()
-                result = optimisation.addObjectiveField(edgeDiscontinuityPenaltyObjective)
-                assert result == RESULT_OK, "Fit Geometry:  Could not add edge discontinuity penalty objective field"
+                print("WARNING! Edge discontinuity penalty is not supported by NEWTON solver - skipping")
+                #edgeDiscontinuityPenaltyObjective = self.createEdgeDiscontinuityPenaltyObjectiveField()
+                #result = optimisation.addObjectiveField(edgeDiscontinuityPenaltyObjective)
+                #assert result == RESULT_OK, "Fit Geometry:  Could not add edge discontinuity penalty objective field"
 
         fieldcache = fieldmodule.createFieldcache()
+        objectiveFormat = "{:12e}"
         for iter in range(self._numberOfIterations):
+            iterName = str(iter + 1)
             if self.getDiagnosticLevel() > 0:
-                print("-------- Iteration", iter + 1)
+                print("-------- Iteration " + iterName)
             if self.getDiagnosticLevel() > 0:
-                for d in range(2):
-                    if dataProjectionObjective[d]:
-                        result, objective = dataProjectionObjective[d].evaluateReal(fieldcache, dataProjectionObjectiveComponentsCount[d])
-                        print("    " + str(d + 1) + "-D data projection objective", objective)
-                if markerObjectiveField:
-                    result, objective = markerObjectiveField.evaluateReal(fieldcache, markerObjectiveField.getNumberOfComponents())
-                    print("    marker objective", objective)
+                result, objective = dataObjective.evaluateReal(fieldcache, 1)
+                print("    Data objective", objectiveFormat.format(objective))
                 if deformationPenaltyObjective:
                     result, objective = deformationPenaltyObjective.evaluateReal(fieldcache, deformationPenaltyObjective.getNumberOfComponents())
-                    print("    deformation penalty objective", objective)
+                    print("    Deformation penalty objective", objectiveFormat.format(objective))
             result = optimisation.optimise()
             if self.getDiagnosticLevel() > 1:
                 solutionReport = optimisation.getSolutionReport()
                 print(solutionReport)
             assert result == RESULT_OK, "Fit Geometry:  Optimisation failed with result " + str(result)
-            self._fitter.calculateDataProjections(self)
             if modelFileNameStem:
-                self._fitter.writeModel(modelFileNameStem + "_fit" + str(iter + 1) + ".exf")
-        if self.getDiagnosticLevel() > 0:
-            print("--------")
+                self._fitter.writeModel(modelFileNameStem + "_fit" + iterName + ".exf")
+            self._fitter.calculateDataProjections(self)
 
         if self.getDiagnosticLevel() > 0:
-            for d in range(2):
-                if dataProjectionObjective[d]:
-                    result, objective = dataProjectionObjective[d].evaluateReal(fieldcache, dataProjectionObjectiveComponentsCount[d])
-                    print("END " + str(d + 1) + "-D data projection objective", objective)
-            if markerObjectiveField:
-                result, objective = markerObjectiveField.evaluateReal(fieldcache, markerObjectiveField.getNumberOfComponents())
-                print("END marker objective", objective)
+            print("--------")
+            result, objective = dataObjective.evaluateReal(fieldcache, 1)
+            print("    END Data objective", objectiveFormat.format(objective))
             if deformationPenaltyObjective:
                 result, objective = deformationPenaltyObjective.evaluateReal(fieldcache, deformationPenaltyObjective.getNumberOfComponents())
-                print("END deformation penalty objective", objective)
+                print("    END Deformation penalty objective", objectiveFormat.format(objective))
 
         if self._updateReferenceState:
             self._fitter.updateModelReferenceCoordinates()
 
         self.setHasRun(True)
 
-    def createDataProjectionObjectiveField(self, dimension, weight):
+    def createDataObjectiveField(self):
         """
-        Get FieldNodesetSumSquares objective for data projected onto mesh of dimension.
-        Minimises length in projection direction, allowing sliding fit.
-        Only call if self._fitter.getDataProjectionNodesetGroup().getSize() > 0
+        Get FieldNodesetSum objective for data projected onto mesh, including markers with fixed locations.
         Assumes ChangeManager(fieldmodule) is in effect.
-        :param dimension: Mesh dimension 1 or 2.
-        :param weight: Real weight to multiply objective terms by.
-        :return: Zinc FieldNodesetSumSquares.
+        :return: Zinc FieldNodesetSum.
         """
         fieldmodule = self._fitter.getFieldmodule()
-        dataScale = self._fitter.getDataScale()
-        dataProjectionDelta = self._fitter.getDataProjectionDeltaField(dimension)
+        delta = self._fitter.getDataDeltaField()
+        weight = self._fitter.getDataWeightField()
+        deltaSq = fieldmodule.createFieldDotProduct(delta, delta)
         #dataProjectionInDirection = fieldmodule.createFieldDotProduct(dataProjectionDelta, self._fitter.getDataProjectionDirectionField())
         #dataProjectionInDirection = fieldmodule.createFieldMagnitude(dataProjectionDelta)
         #dataProjectionInDirection = dataProjectionDelta
-        dataProjectionInDirection = fieldmodule.createFieldConstant([ weight/dataScale ]*dataProjectionDelta.getNumberOfComponents()) * dataProjectionDelta
-        dataProjectionObjective = fieldmodule.createFieldNodesetSumSquares(dataProjectionInDirection, self._fitter.getDataProjectionNodesetGroup(dimension))
+        #dataProjectionInDirection = fieldmodule.createFieldConstant([ weight/dataScale ]*dataProjectionDelta.getNumberOfComponents()) * dataProjectionDelta
+        dataProjectionObjective = fieldmodule.createFieldNodesetSum(weight*deltaSq, self._fitter.getActiveDataNodesetGroup())
+        dataProjectionObjective.setElementMapField(self._fitter.getDataHostLocationField())
         return dataProjectionObjective
-
-    def createMarkerObjectiveField(self, weight):
-        """
-        Only call if self._fitter.getMarkerGroup() and (self._fitter.getMarkerDataLocationNodesetGroup().getSize() > 0) and (self._markerWeight > 0.0)
-        For marker datapoints with locations in model, creates a FieldNodesetSumSquares
-        of coordinate projections to those locations.
-        Assumes ChangeManager(fieldmodule) is in effect.
-        :return: Zinc FieldNodesetSumSquares.
-        """
-        fieldmodule = self._fitter.getFieldmodule()
-        dataScale = self._fitter.getDataScale()
-        markerDataLocation, markerDataLocationCoordinates, markerDataDelta = self._fitter.getMarkerDataLocationFields()
-        markerDataWeightedDelta = markerDataDelta*fieldmodule.createFieldConstant([ weight/dataScale ]*markerDataDelta.getNumberOfComponents())
-        markerDataObjective = fieldmodule.createFieldNodesetSumSquares(markerDataWeightedDelta, self._fitter.getMarkerDataLocationNodesetGroup())
-        return markerDataObjective
 
     def createDeformationPenaltyObjectiveField(self):
         """
         Only call if (self._strainPenaltyWeight > 0.0) or (self._curvaturePenaltyWeight > 0.0)
-        :return: Zinc FieldMeshIntegralSquares, or None if not weighted.
+        :return: Zinc FieldMeshIntegral, or None if not weighted.
         Assumes ChangeManager(fieldmodule) is in effect.
         """
         numberOfGaussPoints = 3
         fieldmodule = self._fitter.getFieldmodule()
         mesh = self._fitter.getHighestDimensionMesh()
-        dataScale = self._fitter.getDataScale()
+        dataScale = 1.0
+        dimension = mesh.getDimension()
+        # future: eliminate effect of model scale
+        #linearDataScale = self._fitter.getDataScale()
+        #for d in range(dimension):
+        #    dataScale /= linearDataScale
+
         displacementGradient1, displacementGradient2 = createFieldsDisplacementGradients(self._fitter.getModelCoordinatesField(), self._fitter.getModelReferenceCoordinatesField(), mesh)
+        deformationTerm = None
         if self._strainPenaltyWeight > 0.0:
-            weightedDisplacementGradient1 = displacementGradient1*fieldmodule.createFieldConstant([ self._strainPenaltyWeight ]*displacementGradient1.getNumberOfComponents())
-        else:
-            weightedDisplacementGradient1 = None
+            # future: allow variable alpha components
+            alpha = fieldmodule.createFieldConstant([ self._strainPenaltyWeight*dataScale ]*displacementGradient1.getNumberOfComponents())
+            wtSqDeformationGradient1 = fieldmodule.createFieldDotProduct(alpha, displacementGradient1*displacementGradient1)
+            assert wtSqDeformationGradient1.isValid()
+            deformationTerm = wtSqDeformationGradient1
         if self._curvaturePenaltyWeight > 0.0:
-            weightedDisplacementGradient2 = displacementGradient2*fieldmodule.createFieldConstant([ self._curvaturePenaltyWeight ]*displacementGradient2.getNumberOfComponents())
-        else:
-            weightedDisplacementGradient2 = None
+            # future: allow variable beta components
+            beta = fieldmodule.createFieldConstant([ self._curvaturePenaltyWeight*dataScale ]*displacementGradient2.getNumberOfComponents())
+            wtSqDeformationGradient2 = fieldmodule.createFieldDotProduct(beta, displacementGradient2*displacementGradient2)
+            assert wtSqDeformationGradient2.isValid()
+            deformationTerm = (deformationTerm + wtSqDeformationGradient2) if deformationTerm else wtSqDeformationGradient2
 
-        if weightedDisplacementGradient1:
-            if weightedDisplacementGradient2:
-                deformationField = fieldmodule.createFieldConcatenate([ weightedDisplacementGradient1, weightedDisplacementGradient2 ])
-            else:
-                deformationField = weightedDisplacementGradient1
-        elif weightedDisplacementGradient2:
-            deformationField = weightedDisplacementGradient2
-        else:
-            return None
-
-        scaledModelReferenceCoordinatesField = self._fitter.getModelReferenceCoordinatesField()*fieldmodule.createFieldConstant([ 1.0/dataScale ]*3)
-        deformationPenaltyObjective = fieldmodule.createFieldMeshIntegralSquares(deformationField, scaledModelReferenceCoordinatesField, mesh)
+        deformationPenaltyObjective = fieldmodule.createFieldMeshIntegral(deformationTerm, self._fitter.getModelReferenceCoordinatesField(), mesh);
         deformationPenaltyObjective.setNumbersOfPoints(numberOfGaussPoints)
         return deformationPenaltyObjective
 

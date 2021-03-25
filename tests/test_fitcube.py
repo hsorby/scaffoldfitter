@@ -2,6 +2,8 @@ import math
 import os
 import unittest
 from opencmiss.utils.zinc.field import createFieldMeshIntegral
+from opencmiss.zinc.field import Field
+from opencmiss.zinc.node import Nodeset
 from opencmiss.zinc.result import RESULT_OK
 from scaffoldfitter.fitter import Fitter
 from scaffoldfitter.fitterjson import decodeJSONFitterSteps
@@ -62,6 +64,24 @@ def transformCoordinatesList(xIn : list, transformationMatrix, translation):
         xOut.append(x2)
     return xOut
 
+def getNodesetConditionalSize(nodeset : Nodeset, conditionalField : Field):
+    """
+    :return: Number of objects in nodeset for which conditionalField is True.
+    """
+    assert conditionalField.getNumberOfComponents() == 1
+    fieldmodule = conditionalField.getFieldmodule()
+    fieldcache = fieldmodule.createFieldcache()
+    nodeiterator = nodeset.createNodeiterator()
+    size = 0
+    node = nodeiterator.next()
+    while node.isValid():
+        fieldcache.setNode(node)
+        result, value = conditionalField.evaluateReal(fieldcache, 1)
+        if value != 0.0:
+            size += 1
+        node = nodeiterator.next()
+    return size
+
 class FitCubeToSphereTestCase(unittest.TestCase):
 
     def test_alignFixedRandomData(self):
@@ -74,8 +94,7 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fitter.setDiagnosticLevel(1)
         fitter.load()
         dataScale = fitter.getDataScale()
-        self.assertAlmostEqual(dataScale, 0.9958462809921166, delta=1.0E-7)
-        fitter._dataScale = 1.0  # to match previous test results
+        self.assertAlmostEqual(dataScale, 1.0, delta=1.0E-7)
 
         self.assertEqual(fitter.getModelCoordinatesField().getName(), "coordinates")
         self.assertEqual(fitter.getDataCoordinatesField().getName(), "data_coordinates")
@@ -118,8 +137,7 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fitter.setDiagnosticLevel(1)
         fitter.load()
         dataScale = fitter.getDataScale()
-        self.assertAlmostEqual(dataScale, 0.991338312625885, delta=1.0E-7)
-        fitter._dataScale = 1.0  # to match previous test results
+        self.assertAlmostEqual(dataScale, 1.0, delta=1.0E-7)
 
         coordinates = fitter.getModelCoordinatesField()
         self.assertEqual(coordinates.getName(), "coordinates")
@@ -136,6 +154,12 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
         self.assertAlmostEqual(volume, 1.0, delta=1.0E-7)
+        activeNodeset = fitter.getActiveDataNodesetGroup()
+        self.assertEqual(292, activeNodeset.getSize())
+        self.assertEqual(72, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("bottom")))
+        self.assertEqual(144, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("sides")))
+        self.assertEqual(72, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("top")))
+        self.assertEqual(4, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("marker")))
 
         align = FitterStepAlign()
         fitter.addFitterStep(align)
@@ -161,7 +185,7 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fitter.addFitterStep(fit1)
         self.assertEqual(3, len(fitter.getFitterSteps()))
         fit1.setMarkerWeight(1.0)
-        fit1.setCurvaturePenaltyWeight(0.1)
+        fit1.setCurvaturePenaltyWeight(0.01)
         fit1.setNumberOfIterations(3)
         fit1.setUpdateReferenceState(True)
         fit1.run()
@@ -169,10 +193,10 @@ class FitCubeToSphereTestCase(unittest.TestCase):
 
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 3.1892231780263853, delta=1.0E-4)
+        self.assertAlmostEqual(surfaceArea, 3.18921662820759, delta=1.0E-4)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(volume, 0.5276229458448985, delta=1.0E-4)
+        self.assertAlmostEqual(volume, 0.5276212500499845, delta=1.0E-4)
 
         # test json serialisation
         s = fitter.encodeSettingsJSON()
@@ -188,6 +212,103 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         #    fitterStep.run()
         s2 = fitter.encodeSettingsJSON()
         self.assertEqual(s, s2)
+
+    def test_groupSettings(self):
+        """
+        Test per-group settings, and inheritance from previous 
+        """
+        zinc_model_file = os.path.join(here, "resources", "cube_to_sphere.exf")
+        zinc_data_file = os.path.join(here, "resources", "cube_to_sphere_data_regular.exf")
+        fitter = Fitter(zinc_model_file, zinc_data_file)
+        fitter.setDiagnosticLevel(1)
+        config1 = fitter.getInitialFitterStepConfig()
+        groupNames = config1.getGroupSettingsNames()
+        self.assertEqual(0, len(groupNames))
+        self.assertEqual((None, False), config1.getGroupDataProportion("sides"))
+        #with self.assertRaises(AssertionError):
+        #    config1.setGroupDataProportion("sides", -0.1)
+        config1.setGroupDataProportion("sides", 0.25)
+        config1.setGroupDataProportion("top", 0.4)
+        groupNames = config1.getGroupSettingsNames()
+        self.assertEqual(2, len(groupNames))
+        self.assertTrue("sides" in groupNames)
+        self.assertTrue("top" in groupNames)
+        self.assertEqual((0.25, True), config1.getGroupDataProportion("sides"))
+        self.assertEqual((0.4, True), config1.getGroupDataProportion("top"))
+        self.assertEqual((None, False), config1.getGroupDataProportion("bottom"))
+        config1.setGroupDataProportion("bottom", 0.1)
+        self.assertEqual((0.1, True), config1.getGroupDataProportion("bottom"))
+        config1.setGroupDataProportion("bottom", None)
+        self.assertEqual((None, True), config1.getGroupDataProportion("bottom"))
+        config1.clearGroupDataProportion("bottom")
+        self.assertEqual((None, False), config1.getGroupDataProportion("bottom"))
+        groupNames = config1.getGroupSettingsNames()
+        self.assertEqual(2, len(groupNames))
+        self.assertTrue("sides" in groupNames)
+        self.assertTrue("top" in groupNames)
+        fitter.load()
+        activeNodeset = fitter.getActiveDataNodesetGroup()
+        self.assertEqual(141, activeNodeset.getSize())
+        self.assertEqual(72, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("bottom")))
+        self.assertEqual(36, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("sides")))
+        self.assertEqual(29, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("top")))
+        self.assertEqual(4, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("marker")))
+        # test override and inherit
+        config2 = FitterStepConfig()
+        fitter.addFitterStep(config2)
+        config2.setGroupDataProportion("top", None)
+        groupNames = config2.getGroupSettingsNames()
+        self.assertEqual(1, len(groupNames))
+        self.assertTrue("top" in groupNames)
+        self.assertEqual((0.25, False), config2.getGroupDataProportion("sides"))
+        self.assertEqual((None, True), config2.getGroupDataProportion("top"))
+        config2.run()
+        activeNodeset = fitter.getActiveDataNodesetGroup()
+        self.assertEqual(184, activeNodeset.getSize())
+        self.assertEqual(72, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("bottom")))
+        self.assertEqual(36, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("sides")))
+        self.assertEqual(72, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("top")))
+        self.assertEqual(4, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("marker")))
+        # test inherit through 2 previous configs and cancel/None in config2
+        config3 = FitterStepConfig()
+        fitter.addFitterStep(config3)
+        groupNames = config3.getGroupSettingsNames()
+        self.assertEqual(0, len(groupNames))
+        self.assertEqual((0.25, False), config3.getGroupDataProportion("sides"))
+        self.assertEqual((None, False), config3.getGroupDataProportion("top"))
+        config3.run()
+        activeNodeset = fitter.getActiveDataNodesetGroup()
+        self.assertEqual(184, activeNodeset.getSize())
+        self.assertEqual(72, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("bottom")))
+        self.assertEqual(36, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("sides")))
+        self.assertEqual(72, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("top")))
+        self.assertEqual(4, getNodesetConditionalSize(activeNodeset, fitter.getFieldmodule().findFieldByName("marker")))
+        del config1
+        del config2
+        del config3
+
+        # test json serialisation
+        s = fitter.encodeSettingsJSON()
+        fitter2 = Fitter(zinc_model_file, zinc_data_file)
+        fitter2.decodeSettingsJSON(s, decodeJSONFitterSteps)
+        fitterSteps = fitter2.getFitterSteps()
+        self.assertEqual(3, len(fitterSteps))
+        config1, config2, config3 = fitterSteps
+        self.assertTrue(isinstance(config1, FitterStepConfig))
+        self.assertTrue(isinstance(config2, FitterStepConfig))
+        self.assertTrue(isinstance(config3, FitterStepConfig))
+        groupNames = config1.getGroupSettingsNames()
+        self.assertEqual(2, len(groupNames))
+        self.assertTrue("sides" in groupNames)
+        self.assertTrue("top" in groupNames)
+        self.assertEqual((0.25, True), config1.getGroupDataProportion("sides"))
+        self.assertEqual((0.4, True), config1.getGroupDataProportion("top"))
+        self.assertEqual((None, False), config1.getGroupDataProportion("bottom"))
+        groupNames = config2.getGroupSettingsNames()
+        self.assertEqual(1, len(groupNames))
+        self.assertTrue("top" in groupNames)
+        self.assertEqual((0.25, False), config2.getGroupDataProportion("sides"))
+        self.assertEqual((None, True), config2.getGroupDataProportion("top"))
 
 if __name__ == "__main__":
     unittest.main()
