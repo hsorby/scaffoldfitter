@@ -375,7 +375,7 @@ class Fitter:
         field = None
         if self._dataCoordinatesFieldName:
             field = self._fieldmodule.findFieldByName(self._dataCoordinatesFieldName)
-        else:
+        if not ((field) and field.isValid()):
             datapoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
             datapoint = datapoints.createNodeiterator().next()
             if datapoint.isValid():
