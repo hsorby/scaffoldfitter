@@ -683,8 +683,6 @@ class Fitter:
         sizeBefore = dataProjectionNodesetGroup.getSize()
         dataCoordinates = self._dataCoordinatesField
         dataProportion = activeFitterStepConfig.getGroupDataProportion(groupName)[0]
-        if not dataProportion:
-            dataProportion = 1.0
         if activeFitterStepConfig.isProjectionCentreGroups():
             # get geometric centre of dataGroup
             dataCentreField = self._fieldmodule.createFieldNodesetMean(dataCoordinates, dataGroup)
