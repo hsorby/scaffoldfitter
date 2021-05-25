@@ -12,14 +12,15 @@ class FitterStepConfig(FitterStep):
     def __init__(self):
         super(FitterStepConfig, self).__init__()
         # Example json serialisation within config step. Include only groups and options in-use
-        # Note that these are model group names; data group names differing by
+        # Note that these are model group names -- data group names differing by
         # case or whitespace are set by Fitter to matching model names.
         #"groupSettings": {
         #    "GROUPNAME1" : {
         #        "dataProportion" : 0.1
         #        }
         #    "GROUPNAME2" : {
-        #        "dataProportion" : null
+        #        "dataProportion" : null,
+        #        "dataWeight" : 5.0
         #        }
         #    }
         # The first group GROUPNAME1 uses only 0.1 = 10% of the data points.
@@ -69,48 +70,139 @@ class FitterStepConfig(FitterStep):
         """
         groupSettings = self._groupSettings.pop(groupName, None)
 
+    def _clearGroupSetting(self, groupName : str, settingName : str):
+        """
+        Clear setting for group, removing group settings dict if empty.
+        :param groupName:  Exact model group name.
+        :param settingName: Exact name of real setting.
+        """
+        groupSettings = self._groupSettings.get(groupName)
+        if groupSettings:
+            groupSettings.pop(settingName, None)
+            if len(groupSettings) == 0:
+                self._groupSettings.pop(groupName)
+
+    def _getGroupSetting(self, groupName : str, settingName : str, defaultValue):
+        """
+        Get group setting of supplied name, with reset & inherit ability.
+        :param groupName:  Exact model group name.
+        :param settingName: Exact name of real setting.
+        :param defaultValue: Value to use if setting not found for group.
+        :return:  value, setLocally, inheritable.
+        Value falls back to defaultValue if not set.
+        The second return value is True if the value is set locally to a value
+        or None if reset locally.
+        The third return value is True if a previous config has set the value.
+        """
+        value = None
+        setLocally = False
+        inheritable = False
+        groupSettings = self._groupSettings.get(groupName)
+        if groupSettings:
+            if settingName in groupSettings:
+                value = groupSettings[settingName]
+                setLocally = None if (value is None) else True
+        inheritConfigStep = self.getFitter().getInheritFitterStepConfig(self)
+        if inheritConfigStep:
+            inheritedValue = inheritConfigStep._getGroupSetting(groupName, settingName, None)[0]
+            if inheritedValue is not None:
+                if not (setLocally or (setLocally is None)):
+                    value = inheritedValue
+                inheritable = True
+        if value is None:
+            value = defaultValue
+        return value, setLocally, inheritable
+
+    def _setGroupSetting(self, groupName : str, settingName : str, value):
+        """
+        Set value of setting or None to reset to global default.
+        :param groupName:  Exact model group name.
+        :param settingName: Exact name of real setting.
+        :param value: Value to assign, or None to reset. If the value is not
+        inherited, None will clear the setting. Caller must check valid value.
+        """
+        groupSettings = self._groupSettings.get(groupName)
+        if not groupSettings:
+            groupSettings = self._groupSettings[groupName] = {}
+        groupSettings[settingName] = value
+        if value is None:
+            inheritConfigStep = self.getFitter().getInheritFitterStepConfig(self)
+            if (not inheritConfigStep) or \
+                (inheritConfigStep._getGroupSetting(groupName, settingName, None)[0] is None):
+                self._clearGroupSetting(groupName, settingName)
+
     def clearGroupDataProportion(self, groupName):
         """
         Clear local group data proportion so fall back to last config or global default.
         :param groupName:  Exact model group name.
         """
-        groupSettings = self._groupSettings.get(groupName)
-        if groupSettings:
-            groupSettings.pop("dataProportion", None)
-            if len(groupSettings) == 0:
-                self._groupSettings.pop(groupName)
+        self._clearGroupSetting(groupName, "dataProportion")
 
     def getGroupDataProportion(self, groupName):
         """
-        Get proportion of group data points to include in fit, or None to
-        use global default.
+        Get proportion of group data points to include in fit, from 0.0 (0%) to
+        1.0 (100%), plus flags indicating where it has been set.
         :param groupName:  Exact model group name.
-        :return:  Proportion, isLocallySet. Proportion is either a value from
-        0.0 to 1.0, where 0.1 = 10%, or None if using global value (1.0).
-        The second return value is True if the value is set locally.
+        :return:  Proportion, setLocally, inheritable.
+        Proportion of points used for group from 0.0 to 1.0.
+        The second return value is True if the value is set locally to a value
+        or None if reset locally.
+        The third return value is True if a previous config has set the value.
         """
-        groupSettings = self._groupSettings.get(groupName)
-        if groupSettings:
-            proportion = groupSettings.get("dataProportion", "INHERIT")
-            if proportion != "INHERIT":
-                return proportion, True
-        inheritConfigStep = self.getFitter().getInheritFitterStepConfig(self)
-        proportion = inheritConfigStep.getGroupDataProportion(groupName)[0] if inheritConfigStep else None
-        return proportion, False
+        return self._getGroupSetting(groupName, "dataProportion", 1.0)
 
     def setGroupDataProportion(self, groupName, proportion):
         """
-        Set proportion of group data points to include in fit, or force
-        return to global default.
+        Set proportion of group data points to include in fit, or reset to
+        global default.
         :param groupName:  Exact model group name.
         :param proportion:  Float valued proportion from 0.0 (0%) to 1.0 (100%),
-        or None to force used of global default. Asserts value is valid.
+        or None to reset to global default. Function ensures value is valid.
         """
-        assert (proportion is None) or (isinstance(proportion, float) and (0.0 <= proportion <= 1.0)), "FitterStepConfig: Invalid group data proportion"
-        groupSettings = self._groupSettings.get(groupName)
-        if not groupSettings:
-            groupSettings = self._groupSettings[groupName] = {}
-        groupSettings["dataProportion"] = proportion
+        if proportion is not None:
+            if not isinstance(proportion, float):
+                proportion = self.getGroupDataProportion(groupName)[0]
+            elif proportion < 0.0:
+                proportion = 0.0
+            elif proportion > 1.0:
+                proportion = 1.0
+        self._setGroupSetting(groupName, "dataProportion", proportion)
+
+    def clearGroupDataWeight(self, groupName):
+        """
+        Clear local group data weight so fall back to last config or global default.
+        :param groupName:  Exact model group name.
+        """
+        self._clearGroupSetting(groupName, "dataWeight")
+
+    def getGroupDataWeight(self, groupName, defaultDataWeight=1.0):
+        """
+        Get weighting of group data points to apply in fit >= 0.0, plus flags
+        indicating where it has been set.
+        :param groupName:  Exact model group name.
+        :param defaultDataWeight:  Value to use if not set for the group.
+        :return:  Weight, setLocally, inheritable.
+        Weight is a real value >= 0.0.
+        The second return value is True if the value is set locally to a value
+        or None if reset locally.
+        The third return value is True if a previous config has set the value.
+        """
+        return self._getGroupSetting(groupName, "dataWeight", defaultDataWeight)
+
+    def setGroupDataWeight(self, groupName, weight):
+        """
+        Set weighting of group data points to apply in fit, or reset to
+        global default.
+        :param groupName:  Exact model group name.
+        :param weight:  Float valued weight >= 0.0, or None to reset to global
+        default. Function ensures value is valid.
+        """
+        if weight is not None:
+            if not isinstance(weight, float):
+                weight = self.getGroupDataWeight(groupName)[0]
+            elif weight < 0.0:
+                weight = 0.0
+        self._setGroupSetting(groupName, "dataWeight", weight)
 
     def isProjectionCentreGroups(self):
         return self._projectionCentreGroups
