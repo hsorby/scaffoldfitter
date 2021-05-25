@@ -213,6 +213,73 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         s2 = fitter.encodeSettingsJSON()
         self.assertEqual(s, s2)
 
+    def test_fitRegularDataGroupWeight(self):
+        """
+        Test automatic alignment of model and data using fiducial markers.
+        """
+        zinc_model_file = os.path.join(here, "resources", "cube_to_sphere.exf")
+        zinc_data_file = os.path.join(here, "resources", "cube_to_sphere_data_regular.exf")
+        fitter = Fitter(zinc_model_file, zinc_data_file)
+        self.assertEqual(1, len(fitter.getFitterSteps()))  # there is always an initial FitterStepConfig
+        fitter.setDiagnosticLevel(1)
+        fitter.load()
+
+        config1 = fitter.getInitialFitterStepConfig()
+        config1.setGroupDataWeight("bottom", 0.5)
+        config1.setGroupDataWeight("sides", 0.1)
+        groupNames = config1.getGroupSettingsNames()
+        self.assertEqual(2, len(groupNames))
+        self.assertEqual((0.5, True, False), config1.getGroupDataWeight("bottom"))
+        self.assertEqual((0.1, True, False), config1.getGroupDataWeight("sides"))
+
+        coordinates = fitter.getModelCoordinatesField()
+        self.assertEqual(coordinates.getName(), "coordinates")
+        fieldmodule = fitter.getFieldmodule()
+        surfaceAreaField = createFieldMeshIntegral(coordinates, fitter.getMesh(2), number_of_points=4)
+        volumeField = createFieldMeshIntegral(coordinates, fitter.getMesh(3), number_of_points=3)
+        fieldcache = fieldmodule.createFieldcache()
+
+        align = FitterStepAlign()
+        fitter.addFitterStep(align)
+        self.assertEqual(2, len(fitter.getFitterSteps()))
+        self.assertTrue(align.setAlignMarkers(True))
+        align.run()
+
+        fit1 = FitterStepFit()
+        fitter.addFitterStep(fit1)
+        self.assertEqual(3, len(fitter.getFitterSteps()))
+        fit1.setMarkerWeight(1.0)
+        fit1.setCurvaturePenaltyWeight(0.01)
+        fit1.setNumberOfIterations(3)
+        fit1.setUpdateReferenceState(True)
+        fit1.run()
+        dataWeightField = fieldmodule.findFieldByName("data_weight").castFiniteElement()
+        print('dataWeightField', dataWeightField.isValid())
+        self.assertTrue(dataWeightField.isValid())
+        groupData = { "bottom" : ( 72, 0.5 ), "sides" : ( 144, 0.1 ), "top" : ( 72, 1.0 ) }
+        mesh2d = fitter.getMesh(2)
+        for groupName in groupData.keys():
+            expectedSize, expectedWeight = groupData[groupName]
+            group = fieldmodule.findFieldByName(groupName).castGroup()
+            dataGroup = fitter.getGroupDataProjectionNodesetGroup(group)
+            size = dataGroup.getSize()
+            self.assertEqual(size, expectedSize)
+            dataIterator = dataGroup.createNodeiterator()
+            node = dataIterator.next()
+            while node.isValid():
+                fieldcache.setNode(node)
+                result, weight = dataWeightField.evaluateReal(fieldcache, 1)
+                self.assertEqual(result, RESULT_OK)
+                self.assertAlmostEqual(weight, expectedWeight, delta=1.0E-10)
+                node = dataIterator.next()
+
+        result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
+        self.assertEqual(result, RESULT_OK)
+        self.assertAlmostEqual(surfaceArea, 3.2298953613027956, delta=1.0E-4)
+        result, volume = volumeField.evaluateReal(fieldcache, 1)
+        self.assertEqual(result, RESULT_OK)
+        self.assertAlmostEqual(volume, 0.5156233237703589, delta=1.0E-4)
+
     def test_groupSettings(self):
         """
         Test per-group settings, and inheritance from previous 

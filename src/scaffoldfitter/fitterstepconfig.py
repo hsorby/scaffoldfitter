@@ -19,7 +19,8 @@ class FitterStepConfig(FitterStep):
         #        "dataProportion" : 0.1
         #        }
         #    "GROUPNAME2" : {
-        #        "dataProportion" : null
+        #        "dataProportion" : null,
+        #        "dataWeight" : 5.0
         #        }
         #    }
         # The first group GROUPNAME1 uses only 0.1 = 10% of the data points.
@@ -166,6 +167,42 @@ class FitterStepConfig(FitterStep):
             elif proportion > 1.0:
                 proportion = 1.0
         self._setGroupSetting(groupName, "dataProportion", proportion)
+
+    def clearGroupDataWeight(self, groupName):
+        """
+        Clear local group data weight so fall back to last config or global default.
+        :param groupName:  Exact model group name.
+        """
+        self._clearGroupSetting(groupName, "dataWeight")
+
+    def getGroupDataWeight(self, groupName, defaultDataWeight=1.0):
+        """
+        Get weighting of group data points to apply in fit >= 0.0, plus flags
+        indicating where it has been set.
+        :param groupName:  Exact model group name.
+        :param defaultDataWeight:  Value to use if not set for the group.
+        :return:  Weight, setLocally, inheritable.
+        Weight is a real value >= 0.0.
+        The second return value is True if the value is set locally to a value
+        or None if reset locally.
+        The third return value is True if a previous config has set the value.
+        """
+        return self._getGroupSetting(groupName, "dataWeight", defaultDataWeight)
+
+    def setGroupDataWeight(self, groupName, weight):
+        """
+        Set weighting of group data points to apply in fit, or reset to
+        global default.
+        :param groupName:  Exact model group name.
+        :param weight:  Float valued weight >= 0.0, or None to reset to global
+        default. Function ensures value is valid.
+        """
+        if weight is not None:
+            if not isinstance(weight, float):
+                weight = self.getGroupDataWeight(groupName)[0]
+            elif weight < 0.0:
+                weight = 0.0
+        self._setGroupSetting(groupName, "dataWeight", weight)
 
     def isProjectionCentreGroups(self):
         return self._projectionCentreGroups

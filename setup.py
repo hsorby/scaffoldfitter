@@ -25,7 +25,7 @@ source_license = readfile("LICENSE")
 
 setup(
     name="scaffoldfitter",
-    version="0.1.1",
+    version="0.2.0",
     description="Scaffold/model geometric fitting library using OpenCMISS-Zinc.",
     long_description="\n".join(readme) + source_license,
     classifiers=[

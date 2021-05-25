@@ -16,7 +16,7 @@ class FitterStepFit(FitterStep):
     def __init__(self):
         super(FitterStepFit, self).__init__()
         self._lineWeight = 10.0
-        self._markerWeight = 1.0
+        self._markerWeight = 100.0
         self._strainPenaltyWeight = 0.0
         self._curvaturePenaltyWeight = 0.0
         self._edgeDiscontinuityPenaltyWeight = 0.0
@@ -146,7 +146,7 @@ class FitterStepFit(FitterStep):
         Fit model geometry parameters to data.
         :param modelFileNameStem: Optional name stem of intermediate output file to write.
         """
-        self._fitter.assignDataWeights(self._lineWeight, self._markerWeight);
+        self._fitter.assignDataWeights(self, self._lineWeight, self._markerWeight);
 
         fieldmodule = self._fitter._region.getFieldmodule()
         optimisation = fieldmodule.createOptimisation()

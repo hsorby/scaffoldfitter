@@ -453,26 +453,42 @@ class Fitter:
             self._markerDataGroup = None
         self._calculateMarkerDataLocations()
 
-    def assignDataWeights(self, lineWeight, markerWeight):
+    def assignDataWeights(self, fitterStep : FitterStep, defaultLineWeight, defaultMarkerWeight):
         '''
         Assign values of the weight field for all data and marker points.
         Assigns value 1.0 to datapoints embedded in 2-D surfaces, multiplying
         by other factors for other geometries.
-        :param lineWeight: Multiplier for data embedded in 1-D lines.
-        :param markerWeight: Multiplier for marker points data.
+        :param defaultLineWeight: Default weight for data embedded in 1-D lines.
+        :param defaultMarkerWeight: Default weight for marker points data.
         '''
         # Future: divide by linear data scale?
         # Future: divide by number of data points?
+        activeConfig = self.getActiveFitterStepConfig(fitterStep)
         with ChangeManager(self._fieldmodule):
-            for d in range(2):  # dimension 1, 2
-                if self._dataProjectionNodesetGroups[d]:
-                    fieldassignment = self._dataWeightField.createFieldassignment(self._fieldmodule.createFieldConstant(lineWeight if (d == 0) else 1.0))
-                    fieldassignment.setNodeset(self._dataProjectionNodesetGroups[d]);
-                    result = fieldassignment.assign();
-                    if result != RESULT_OK:
-                        print('Incomplete assignment of data weight ' + str(d + 1) + 'D. Result', result)
+            for groupName in self._dataProjectionGroupNames:
+                group = self._fieldmodule.findFieldByName(groupName).castGroup()
+                if not group.isValid():
+                    continue
+                dataGroup = self.getGroupDataProjectionNodesetGroup(group)
+                if not dataGroup:
+                    continue
+                meshGroup = self.getGroupDataProjectionMeshGroup(group)
+                dimension = meshGroup.getDimension()
+                defaultDataWeight = defaultLineWeight if (dimension == 1) else 1.0
+                dataWeight = activeConfig.getGroupDataWeight(groupName, defaultDataWeight=defaultDataWeight)[0]
+                #print("group", groupName, "dimension", dimension, "weight", dataWeight)
+                fieldassignment = self._dataWeightField.createFieldassignment(
+                    self._fieldmodule.createFieldConstant(dataWeight))
+                fieldassignment.setNodeset(dataGroup);
+                result = fieldassignment.assign();
+                if result != RESULT_OK:
+                    print("Incomplete assignment of data weight for group", groupName, "Result", result)
             if self._markerDataLocationGroup:
-                fieldassignment = self._dataWeightField.createFieldassignment(self._fieldmodule.createFieldConstant(markerWeight))
+                markerWeight = activeConfig.getGroupDataWeight(self._markerGroupName,
+                    defaultDataWeight=defaultMarkerWeight)[0]
+                #print("marker weight", markerWeight)
+                fieldassignment = self._dataWeightField.createFieldassignment(
+                    self._fieldmodule.createFieldConstant(markerWeight))
                 fieldassignment.setNodeset(self._markerDataLocationGroup);
                 result = fieldassignment.assign();
                 if result != RESULT_OK:
