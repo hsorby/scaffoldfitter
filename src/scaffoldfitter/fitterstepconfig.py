@@ -84,7 +84,7 @@ class FitterStepConfig(FitterStep):
         :deprecated: use setGroupCentralProjection.
         """
         print("Config setProjectionCentreGroups is deprecated", file=sys.stderr)
-        self.getGroupCentralProjection(None, projectionCentreGroups)
+        self.setGroupCentralProjection(None, projectionCentreGroups)
 
     def clearGroupDataProportion(self, groupName):
         """
