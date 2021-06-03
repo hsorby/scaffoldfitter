@@ -104,6 +104,17 @@ class Fitter:
         """
         return self._fitterSteps[0]
 
+    def getInheritFitterStep(self, refFitterStep : FitterStep):
+        """
+        Get last FitterStep of same type as refFitterStep or None if
+        refFitterStep is the first.
+        """
+        refType = type(refFitterStep)
+        for index in range(self._fitterSteps.index(refFitterStep) - 1, -1, -1):
+            if type(self._fitterSteps[index]) == refType:
+                return self._fitterSteps[index]
+        return None
+
     def getInheritFitterStepConfig(self, refFitterStep : FitterStep):
         """
         Get last FitterStepConfig applicable to refFitterStep or None if
@@ -453,17 +464,12 @@ class Fitter:
             self._markerDataGroup = None
         self._calculateMarkerDataLocations()
 
-    def assignDataWeights(self, fitterStep : FitterStep, defaultLineWeight, defaultMarkerWeight):
+    def assignDataWeights(self, fitterStep : FitterStep):
         '''
         Assign values of the weight field for all data and marker points.
-        Assigns value 1.0 to datapoints embedded in 2-D surfaces, multiplying
-        by other factors for other geometries.
-        :param defaultLineWeight: Default weight for data embedded in 1-D lines.
-        :param defaultMarkerWeight: Default weight for marker points data.
         '''
         # Future: divide by linear data scale?
         # Future: divide by number of data points?
-        activeConfig = self.getActiveFitterStepConfig(fitterStep)
         with ChangeManager(self._fieldmodule):
             for groupName in self._dataProjectionGroupNames:
                 group = self._fieldmodule.findFieldByName(groupName).castGroup()
@@ -475,7 +481,7 @@ class Fitter:
                 meshGroup = self.getGroupDataProjectionMeshGroup(group)
                 dimension = meshGroup.getDimension()
                 defaultDataWeight = defaultLineWeight if (dimension == 1) else 1.0
-                dataWeight = activeConfig.getGroupDataWeight(groupName, defaultDataWeight=defaultDataWeight)[0]
+                dataWeight = fitterStep.getGroupDataWeight(groupName)[0]
                 #print("group", groupName, "dimension", dimension, "weight", dataWeight)
                 fieldassignment = self._dataWeightField.createFieldassignment(
                     self._fieldmodule.createFieldConstant(dataWeight))
@@ -484,8 +490,7 @@ class Fitter:
                 if result != RESULT_OK:
                     print("Incomplete assignment of data weight for group", groupName, "Result", result)
             if self._markerDataLocationGroup:
-                markerWeight = activeConfig.getGroupDataWeight(self._markerGroupName,
-                    defaultDataWeight=defaultMarkerWeight)[0]
+                markerWeight = fitterStep.getGroupDataWeight(self._markerGroupName)[0]
                 #print("marker weight", markerWeight)
                 fieldassignment = self._dataWeightField.createFieldassignment(
                     self._fieldmodule.createFieldConstant(markerWeight))
@@ -699,7 +704,8 @@ class Fitter:
         sizeBefore = dataProjectionNodesetGroup.getSize()
         dataCoordinates = self._dataCoordinatesField
         dataProportion = activeFitterStepConfig.getGroupDataProportion(groupName)[0]
-        if activeFitterStepConfig.isProjectionCentreGroups():
+        centralProjection = activeFitterStepConfig.getGroupCentralProjection(groupName)[0]
+        if centralProjection:
             # get geometric centre of dataGroup
             dataCentreField = self._fieldmodule.createFieldNodesetMean(dataCoordinates, dataGroup)
             result, dataCentre = dataCentreField.evaluateReal(fieldcache, dataCoordinates.getNumberOfComponents())
@@ -858,6 +864,9 @@ class Fitter:
 
     def getDataProjectionDirectionField(self):
         return self._dataProjectionDirectionField
+
+    def getDataProjectionGroupNames(self):
+        return self._dataProjectionGroupNames
 
     def getDataProjectionNodeGroupField(self, dimension):
         assert 1 <= dimension <= 2

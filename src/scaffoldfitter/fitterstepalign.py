@@ -68,7 +68,7 @@ class FitterStepAlign(FitterStep):
         """
         Decode definition of step from JSON dict.
         """
-        assert self._jsonTypeId in dctIn
+        super().decodeSettingsJSONDict(dctIn)  # to decode group settings
         # ensure all new options are in dct
         dct = self.encodeSettingsJSONDict()
         dct.update(dctIn)
@@ -83,14 +83,15 @@ class FitterStepAlign(FitterStep):
         Encode definition of step in dict.
         :return: Settings in a dict ready for passing to json.dump.
         """
-        return {
-            self._jsonTypeId : True,
+        dct = super().encodeSettingsJSONDict()
+        dct.update({
             "alignGroups" : self._alignGroups,
             "alignMarkers" : self._alignMarkers,
             "rotation" : self._rotation,
             "scale" : self._scale,
             "translation" : self._translation
-            }
+            })
+        return dct
 
     def isAlignGroups(self):
         return self._alignGroups
