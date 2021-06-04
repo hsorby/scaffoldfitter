@@ -197,7 +197,7 @@ class FitterStepFit(FitterStep):
             assert isinstance(strainPenalty, list), "FitterStepFit: setGroupStrainPenalty requires a list of float"
             strainPenalty = strainPenalty[:9]  # shallow copy, limiting size
             count = len(strainPenalty)
-            assert len > 0, "FitterStepFit: setGroupStrainPenalty requires a list of at least 1 float"
+            assert count > 0, "FitterStepFit: setGroupStrainPenalty requires a list of at least 1 float"
             for i in range(count):
                 assert isinstance(strainPenalty[i], float), "FitterStepFit: setGroupStrainPenalty requires a list of float"
                 if strainPenalty[i] < 0.0:
