@@ -35,7 +35,6 @@ class FitterStepFit(FitterStep):
         # ensure all new options are in dct
         dct = self.encodeSettingsJSONDict()
         dct.update(dctIn)
-        print("decodeSettingsJSONDict fitter", self._fitter)
         self._numberOfIterations = dct["numberOfIterations"]
         self._maximumSubIterations = dct["maximumSubIterations"]
         self._updateReferenceState = dct["updateReferenceState"]
@@ -49,10 +48,10 @@ class FitterStepFit(FitterStep):
         # convert legacy single-valued strain and curvature penalty weights to list:
         strainPenaltyWeight = dct.get("strainPenaltyWeight")
         if strainPenaltyWeight is not None:
-            self.setGroupStrainPenalty(None, strainPenaltyWeight)
+            self.setGroupStrainPenalty(None, [strainPenaltyWeight])
         curvaturePenaltyWeight = dct.get("curvaturePenaltyWeight")
         if curvaturePenaltyWeight is not None:
-            self.setGroupCurvaturePenalty(None, curvaturePenaltyWeight)
+            self.setGroupCurvaturePenalty(None, [curvaturePenaltyWeight])
 
     def encodeSettingsJSONDict(self) -> dict:
         """
@@ -135,9 +134,11 @@ class FitterStepFit(FitterStep):
         :deprecated: Use getGroupDataWeight().
         """
         print("Fit getMarkerWeight is deprecated", file=sys.stderr)
-        markerGroupName = self._fitter.getMarkerGroup().getName()
-        if markerGroupName:
-            return self.getGroupDataWeight(markerGroupName, markerWeight)[0]
+        markerGroup = self._fitter.getMarkerGroup()
+        if markerGroup:
+            return self.getGroupDataWeight(markerGroup.getName(), markerWeight)[0]
+        else:
+            print("Fit getMarkerWeight. Missing marker group", file=sys.stderr)
         return 0.0
 
     def setMarkerWeight(self, markerWeight):
@@ -145,9 +146,11 @@ class FitterStepFit(FitterStep):
         :deprecated: Use setGroupDataWeight().
         """
         print("Fit setMarkerWeight is deprecated", file=sys.stderr)
-        markerGroupName = self._fitter.getMarkerGroup().getName()
-        if markerGroupName:
-            self.setGroupDataWeight(markerGroupName, markerWeight)
+        markerGroup = self._fitter.getMarkerGroup()
+        if markerGroup:
+            self.setGroupDataWeight(markerGroup.getName(), markerWeight)
+        else:
+            print("Fit setMarkerWeight. Missing marker group: need to set marker group data weight to ", markerWeight, file=sys.stderr)
 
     def clearGroupStrainPenalty(self, groupName: str):
         """
@@ -338,7 +341,8 @@ class FitterStepFit(FitterStep):
         Fit model geometry parameters to data.
         :param modelFileNameStem: Optional name stem of intermediate output file to write.
         """
-        self._fitter.assignDataWeights(self);
+        self._fitter.assignDataWeights(self)
+        deformActiveMeshGroup, strainActiveMeshGroup, curvatureActiveMeshGroup = self._fitter.assignDeformationPenalties(self)
 
         fieldmodule = self._fitter._region.getFieldmodule()
         optimisation = fieldmodule.createOptimisation()
@@ -387,9 +391,8 @@ class FitterStepFit(FitterStep):
             dataObjective = self.createDataObjectiveField()
             result = optimisation.addObjectiveField(dataObjective)
             assert result == RESULT_OK, "Fit Geometry:  Could not add data objective field"
-            # temporary check until per-group, multi-component penalties implemented:
-            if (self.getStrainPenaltyWeight() > 0.0) or (self.getCurvaturePenaltyWeight() > 0.0):
-                deformationPenaltyObjective = self.createDeformationPenaltyObjectiveField()
+            if deformActiveMeshGroup.getSize() > 0:
+                deformationPenaltyObjective = self.createDeformationPenaltyObjectiveField(deformActiveMeshGroup, strainActiveMeshGroup, curvatureActiveMeshGroup)
                 result = optimisation.addObjectiveField(deformationPenaltyObjective)
                 assert result == RESULT_OK, "Fit Geometry:  Could not add strain/curvature penalty objective field"
             #if self._edgeDiscontinuityPenaltyWeight > 0.0:
@@ -450,9 +453,11 @@ class FitterStepFit(FitterStep):
         dataProjectionObjective.setElementMapField(self._fitter.getDataHostLocationField())
         return dataProjectionObjective
 
-    def createDeformationPenaltyObjectiveField(self):
+    def createDeformationPenaltyObjectiveField(self, deformActiveMeshGroup, strainActiveMeshGroup, curvatureActiveMeshGroup):
         """
         Only call for non-zero strain or curvature penalty values.
+        :param deformActiveMeshGroup, strainActiveMeshGroup, curvatureActiveMeshGroup:
+        Mesh groups over which to apply combined, strain or curvature penalties.
         :return: Zinc field, or None if not weighted.
         Assumes ChangeManager(fieldmodule) is in effect.
         """
@@ -460,30 +465,26 @@ class FitterStepFit(FitterStep):
         fieldmodule = self._fitter.getFieldmodule()
         mesh = self._fitter.getHighestDimensionMesh()
         dataScale = 1.0
-        dimension = mesh.getDimension()
         # future: eliminate effect of model scale
+        #dimension = mesh.getDimension()
         #linearDataScale = self._fitter.getDataScale()
         #for d in range(dimension):
         #    dataScale /= linearDataScale
 
         displacementGradient1, displacementGradient2 = createFieldsDisplacementGradients(self._fitter.getModelCoordinatesField(), self._fitter.getModelReferenceCoordinatesField(), mesh)
         deformationTerm = None
-        strainPenaltyWeight = self.getStrainPenaltyWeight()
-        curvaturePenaltyWeight = self.getCurvaturePenaltyWeight()
-        if strainPenaltyWeight > 0.0:
-            # future: allow variable alpha components
-            alpha = fieldmodule.createFieldConstant([ strainPenaltyWeight*dataScale ]*displacementGradient1.getNumberOfComponents())
+        if strainActiveMeshGroup.getSize() > 0:
+            alpha = self._fitter.getStrainPenaltyField()
             wtSqDeformationGradient1 = fieldmodule.createFieldDotProduct(alpha, displacementGradient1*displacementGradient1)
             assert wtSqDeformationGradient1.isValid()
             deformationTerm = wtSqDeformationGradient1
-        if curvaturePenaltyWeight > 0.0:
-            # future: allow variable beta components
-            beta = fieldmodule.createFieldConstant([ curvaturePenaltyWeight*dataScale ]*displacementGradient2.getNumberOfComponents())
+        if curvatureActiveMeshGroup.getSize() > 0:
+            beta = self._fitter.getCurvaturePenaltyField()
             wtSqDeformationGradient2 = fieldmodule.createFieldDotProduct(beta, displacementGradient2*displacementGradient2)
             assert wtSqDeformationGradient2.isValid()
             deformationTerm = (deformationTerm + wtSqDeformationGradient2) if deformationTerm else wtSqDeformationGradient2
 
-        deformationPenaltyObjective = fieldmodule.createFieldMeshIntegral(deformationTerm, self._fitter.getModelReferenceCoordinatesField(), mesh);
+        deformationPenaltyObjective = fieldmodule.createFieldMeshIntegral(deformationTerm, self._fitter.getModelReferenceCoordinatesField(), deformActiveMeshGroup)
         deformationPenaltyObjective.setNumbersOfPoints(numberOfGaussPoints)
         return deformationPenaltyObjective
 
