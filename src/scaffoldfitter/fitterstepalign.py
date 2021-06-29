@@ -68,7 +68,7 @@ class FitterStepAlign(FitterStep):
         """
         Decode definition of step from JSON dict.
         """
-        assert self._jsonTypeId in dctIn
+        super().decodeSettingsJSONDict(dctIn)  # to decode group settings
         # ensure all new options are in dct
         dct = self.encodeSettingsJSONDict()
         dct.update(dctIn)
@@ -83,14 +83,15 @@ class FitterStepAlign(FitterStep):
         Encode definition of step in dict.
         :return: Settings in a dict ready for passing to json.dump.
         """
-        return {
-            self._jsonTypeId : True,
+        dct = super().encodeSettingsJSONDict()
+        dct.update({
             "alignGroups" : self._alignGroups,
             "alignMarkers" : self._alignMarkers,
             "rotation" : self._rotation,
             "scale" : self._scale,
             "translation" : self._translation
-            }
+            })
+        return dct
 
     def isAlignGroups(self):
         return self._alignGroups
@@ -204,20 +205,22 @@ class FitterStepAlign(FitterStep):
             datapoints = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
             dataCoordinates = self._fitter.getDataCoordinatesField()
             groups = get_group_list(fieldmodule)
-            for group in groups:
-                dataGroup = self._fitter.getGroupDataProjectionNodesetGroup(group)
-                if not dataGroup:
-                    continue
-                meshGroup = self._fitter.getGroupDataProjectionMeshGroup(group)
-                if not meshGroup:
-                    continue
-                groupName = group.getName()
-                with ChangeManager(fieldmodule):
+            with ChangeManager(fieldmodule):
+                one = fieldmodule.createFieldConstant(1.0)
+                for group in groups:
+                    dataGroup = self._fitter.getGroupDataProjectionNodesetGroup(group)
+                    if not dataGroup:
+                        continue
+                    meshGroup = self._fitter.getGroupDataProjectionMeshGroup(group)
+                    if not meshGroup:
+                        continue
+                    groupName = group.getName()
                     meanDataCoordinates = evaluate_field_nodeset_mean(dataCoordinates, dataGroup)
                     coordinates_integral = evaluate_field_mesh_integral(modelCoordinates, modelCoordinates, meshGroup)
-                    mass = evaluate_field_mesh_integral(fieldmodule.createFieldConstant(1.0), modelCoordinates, meshGroup)
+                    mass = evaluate_field_mesh_integral(one, modelCoordinates, meshGroup)
                     meanModelCoordinates = div(coordinates_integral, mass)
                     pointMap[groupName] = ( meanModelCoordinates, meanDataCoordinates )
+                del one
 
         if self._alignMarkers:
             markerGroup = self._fitter.getMarkerGroup()
