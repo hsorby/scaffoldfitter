@@ -779,7 +779,7 @@ class Fitter:
         orphanFieldByName(self._fieldmodule, modelReferenceCoordinatesFieldName)
         self._modelReferenceCoordinatesField = createFieldFiniteElementClone(self._modelCoordinatesField, modelReferenceCoordinatesFieldName)
         self._defineCommonDataFields()
-        self._updateMarkerCoordinatesField
+        self._updateMarkerCoordinatesField()
 
     def setModelCoordinatesFieldByName(self, modelCoordinatesFieldName):
         self.setModelCoordinatesField(self._fieldmodule.findFieldByName(modelCoordinatesFieldName))
