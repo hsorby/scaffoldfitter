@@ -543,7 +543,6 @@ class Fitter:
                     continue
                 meshGroup = self.getGroupDataProjectionMeshGroup(group)
                 dimension = meshGroup.getDimension()
-                defaultDataWeight = defaultLineWeight if (dimension == 1) else 1.0
                 dataWeight = fitterStepFit.getGroupDataWeight(groupName)[0]
                 #print("group", groupName, "dimension", dimension, "weight", dataWeight)
                 fieldassignment = self._dataWeightField.createFieldassignment(
