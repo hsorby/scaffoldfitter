@@ -214,6 +214,9 @@ class Fitter:
         minimums, maximums = evaluateFieldNodesetRange(self._dataCoordinatesField, datapoints)
         self._dataCentre = [ 0.5*(minimums[c] + maximums[c]) for c in range(3) ]
         self._dataScale = max((maximums[c] - minimums[c]) for c in range(3))
+        modelpoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+        minimums, maximums = evaluateFieldNodesetRange(self._modelCoordinatesField, modelpoints)
+        self._modelScale = max((maximums[c] - minimums[c]) for c in range(3))
         if self._diagnosticLevel > 0:
             print("Load data: data coordinates centre ", self._dataCentre)
             print("Load data: data coordinates scale ", self._dataScale)
@@ -232,6 +235,12 @@ class Fitter:
         :return: Pre-calculated maximum span of data on x, y, or z.
         """
         return self._dataScale
+
+    def getModelScale(self):
+        """
+        :return: Pre-calculated maximum span of model on x, y, or z.
+        """
+        return self._modelScale
 
     def _defineCommonMeshFields(self):
         """
