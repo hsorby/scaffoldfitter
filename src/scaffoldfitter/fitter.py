@@ -228,7 +228,7 @@ class Fitter:
         """
         :return: Pre-calculated centre of data on [ x, y, z].
         """
-        return self._dataScale
+        return self._dataCentre
 
     def getDataScale(self):
         """
