@@ -285,8 +285,8 @@ class FitterStepAlign(FitterStep):
             for name, positions in pointMap.items():
                 modelx = positions[0]
                 datax = positions[1]
-                modelsum = [modelsum[c] + modelx[c] for c in range(3)]
-                datasum = [datasum[c] + datax[c] for c in range(3)]
+                modelsum = [(modelsum[c] + modelx[c]) for c in range(3)]
+                datasum = [(datasum[c] + datax[c]) for c in range(3)]
                 node = nodes.createNode(-1, nodetemplate)
                 fieldcache.setNode(node)
                 result1 = modelCoordinates.assignReal(fieldcache, positions[0])
@@ -294,9 +294,9 @@ class FitterStepAlign(FitterStep):
                 assert (result1 == RESULT_OK) and (result2 == RESULT_OK), "Align:  Failed to set up data for alignment to markers optimisation"
 
             groupCount = len(pointMap)
-            modelCM = [c / groupCount for c in modelsum]
-            dataCM = [c / groupCount for c in datasum]
-            translationOffset = [dataCM[c] - modelCM[c] for c in range(3)]
+            modelCM = [(c / groupCount) for c in modelsum]
+            dataCM = [(c / groupCount) for c in datasum]
+            translationOffset = [(dataCM[c] - modelCM[c]) for c in range(3)]
 
             del fieldcache
 
