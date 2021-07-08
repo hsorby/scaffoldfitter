@@ -310,64 +310,47 @@ class FitterStepAlign(FitterStep):
 
             del fieldcache
 
+            # Pre-align to avoid gimbal lock
             translationScaleFactor = 1.0
-
-            modelCoordinatesTransformed, rotation, scale, translation = createFieldsTransformations(
-                modelCoordinates, scale_value = scaleFactor, translation_offsets=translationOffset,
-                translation_scale_factor=translationScaleFactor)
-
-            # create objective = sum of squares of vector from modelCoordinatesTransformed to dataCoordinates
-            markerDiff = fieldmodule.createFieldSubtract(dataCoordinates, modelCoordinatesTransformed)
-            scaledMarkerDiff = markerDiff * fieldmodule.createFieldConstant([1.0 / translationScaleFactor] * 3)
-            objective = fieldmodule.createFieldNodesetSumSquares(scaledMarkerDiff, nodes)
-            # objective = fieldmodule.createFieldNodesetSum(fieldmodule.createFieldMagnitude(scaledMarkerDiff), nodes)
+            first = True
             fieldcache = fieldmodule.createFieldcache()
-            result, objectiveValues = objective.evaluateReal(fieldcache, 3)
+            for x in range(2):
+                for y in (range(4) if x == 0 else (0, 2)):
+                    for z in range(4):
+                        azimuth = 0.5 * math.pi * z
+                        elevation = 0.5 * math.pi * y
+                        roll = 0.5 * math.pi * x
+                        rotationAngles = [azimuth, elevation, roll]
 
-            # # Pre-align to avoid gimbal lock
-            # translationScaleFactor = 1.0
-            # for x in range(2):
-            #     for y in (range(4) if x == 0 else (0, 2)):
-            #         for z in range(4):
-            #             azimuth = 0.5 * math.pi * z
-            #             elevation = 0.5 * math.pi * y
-            #             roll = 0.5 * math.pi * x
-            #             rotationAngles = [azimuth, elevation, roll]
-            #
-            #             modelCoordinatesTransformed, rotation, scale, translation = createFieldsTransformations(
-            #                 modelCoordinates, rotationAngles, scaleFactor, translationOffset, translationScaleFactor)
-            #
-            #             # create objective = sum of squares of vector from modelCoordinatesTransformed to dataCoordinates
-            #             markerDiff = fieldmodule.createFieldSubtract(dataCoordinates, modelCoordinatesTransformed)
-            #             scaledMarkerDiff = markerDiff*fieldmodule.createFieldConstant([ 1.0/translationScaleFactor]*3)
-            #             objective = fieldmodule.createFieldNodesetSumSquares(scaledMarkerDiff, nodes)
-            #             # objective = fieldmodule.createFieldNodesetSum(fieldmodule.createFieldMagnitude(scaledMarkerDiff), nodes)
-            #             fieldcache = fieldmodule.createFieldcache()
-            #             result, objectiveValues = objective.evaluateReal(fieldcache, 3)
-            #
-            #             if x == 0 and y == 0 and z == 0:
-            #                 minObjectiveValue = sum(objectiveValues)
-            #                 minObjective = objective
-            #                 minRotation = rotation
-            #                 minScale = scale
-            #                 minTranslation = translation
-            #             else:
-            #                 if sum(objectiveValues) < minObjectiveValue:
-            #                     minObjective = objective
-            #                     minRotation = rotation
-            #                     minScale = scale
-            #                     minTranslation = translation
-            #             del fieldcache
+                        modelCoordinatesTransformed, rotation, scale, translation = createFieldsTransformations(
+                            modelCoordinates, rotationAngles, scaleFactor, translationOffset, translationScaleFactor)
 
-            assert objective.isValid(), "Align:  Failed to set up objective function for alignment to markers optimisation"
+                        # create objective = sum of squares of vector from modelCoordinatesTransformed to dataCoordinates
+                        markerDiff = fieldmodule.createFieldSubtract(dataCoordinates, modelCoordinatesTransformed)
+                        scaledMarkerDiff = markerDiff*fieldmodule.createFieldConstant([ 1.0/translationScaleFactor]*3)
+                        objective = fieldmodule.createFieldNodesetSumSquares(scaledMarkerDiff, nodes)
+                        # objective = fieldmodule.createFieldNodesetSum(fieldmodule.createFieldMagnitude(scaledMarkerDiff), nodes)
+                        result, objectiveValues = objective.evaluateReal(fieldcache, 3)
+                        objectiveValue = sum(objectiveValues)
+
+                        if first or (objectiveValue < minObjectiveValue):
+                            first = False
+                            minObjectiveValue = objectiveValue
+                            # store other values
+                            minObjective = objective
+                            minRotation = rotation
+                            minScale = scale
+                            minTranslation = translation
+
+            assert minObjective.isValid(), "Align:  Failed to set up objective function for alignment to markers optimisation"
 
         optimisation = fieldmodule.createOptimisation()
         optimisation.setMethod(Optimisation.METHOD_LEAST_SQUARES_QUASI_NEWTON)
         #optimisation.setMethod(Optimisation.METHOD_QUASI_NEWTON)
-        optimisation.addObjectiveField(objective)
-        optimisation.addDependentField(rotation)
-        optimisation.addDependentField(scale)
-        optimisation.addDependentField(translation)
+        optimisation.addObjectiveField(minObjective)
+        optimisation.addDependentField(minRotation)
+        optimisation.addDependentField(minScale)
+        optimisation.addDependentField(minTranslation)
 
         #FunctionTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_FUNCTION_TOLERANCE)
         #GradientTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_GRADIENT_TOLERANCE)
@@ -408,20 +391,11 @@ class FitterStepAlign(FitterStep):
             print(solutionReport)
         assert result == RESULT_OK, "Align:  Alignment to markers optimisation failed"
 
-        # fieldcache = fieldmodule.createFieldcache()
-        # result1, self._rotation = minRotation.evaluateReal(fieldcache, 3)
-        # result2, self._scale = minScale.evaluateReal(fieldcache, 1)
-        # result3, self._translation = minTranslation.evaluateReal(fieldcache, 3)
-        # self._translation = [ s*translationScaleFactor for s in self._translation ]
-        # assert (result1 == RESULT_OK) and (result2 == RESULT_OK) and (result3 == RESULT_OK), "Align:  Failed to evaluate transformation for alignment to markers"
-
-        fieldcache = fieldmodule.createFieldcache()
-        result1, self._rotation = rotation.evaluateReal(fieldcache, 3)
-        result2, self._scale = scale.evaluateReal(fieldcache, 1)
-        result3, self._translation = translation.evaluateReal(fieldcache, 3)
+        result1, self._rotation = minRotation.evaluateReal(fieldcache, 3)
+        result2, self._scale = minScale.evaluateReal(fieldcache, 1)
+        result3, self._translation = minTranslation.evaluateReal(fieldcache, 3)
         self._translation = [ s*translationScaleFactor for s in self._translation ]
         assert (result1 == RESULT_OK) and (result2 == RESULT_OK) and (result3 == RESULT_OK), "Align:  Failed to evaluate transformation for alignment to markers"
-
 
 def evaluate_field_mesh_integral(field : Field, coordinates : Field, mesh: Mesh, number_of_points = 4):
     """
