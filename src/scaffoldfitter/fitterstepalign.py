@@ -4,7 +4,7 @@ Fit step for gross alignment and scale.
 
 import copy
 import math
-from opencmiss.utils.maths.vectorops import div
+from opencmiss.utils.maths.vectorops import div, euler_to_rotation_matrix, matrix_vector_mult, mult, sub
 from opencmiss.utils.zinc.field import assignFieldParameters, get_group_list, create_field_euler_angles_rotation_matrix
 from opencmiss.utils.zinc.finiteelement import evaluate_field_nodeset_mean, getNodeNameCentres
 from opencmiss.utils.zinc.general import ChangeManager
@@ -38,7 +38,7 @@ def createFieldsTransformations(coordinates: Field, rotation_angles=None, scale_
         and (len(translation_offsets) == components_count), "createFieldsTransformations.  Invalid arguments"
     fieldmodule = coordinates.getFieldmodule()
     with ChangeManager(fieldmodule):
-        # scale, translate and rotate model, in that order
+        # Rotate, scale, and translate model, in that order
         rotation = fieldmodule.createFieldConstant(rotation_angles)
         scale = fieldmodule.createFieldConstant(scale_value)
         translation = fieldmodule.createFieldConstant(translation_offsets)
@@ -314,6 +314,14 @@ class FitterStepAlign(FitterStep):
             translationScaleFactor = 1.0
             first = True
             fieldcache = fieldmodule.createFieldcache()
+            modelCoordinatesTransformed, rotation, scale, translation = createFieldsTransformations(modelCoordinates,
+                                                                                                    scale_value=scaleFactor)
+
+            # create objective = sum of squares of vector from modelCoordinatesTransformed to dataCoordinates
+            markerDiff = fieldmodule.createFieldSubtract(dataCoordinates, modelCoordinatesTransformed)
+            scaledMarkerDiff = markerDiff * fieldmodule.createFieldConstant([1.0 / translationScaleFactor] * 3)
+            objective = fieldmodule.createFieldNodesetSumSquares(scaledMarkerDiff, nodes)
+
             for x in range(2):
                 for y in (range(4) if x == 0 else (0, 2)):
                     for z in range(4):
@@ -321,36 +329,31 @@ class FitterStepAlign(FitterStep):
                         elevation = 0.5 * math.pi * y
                         roll = 0.5 * math.pi * x
                         rotationAngles = [azimuth, elevation, roll]
-
-                        modelCoordinatesTransformed, rotation, scale, translation = createFieldsTransformations(
-                            modelCoordinates, rotationAngles, scaleFactor, translationOffset, translationScaleFactor)
-
-                        # create objective = sum of squares of vector from modelCoordinatesTransformed to dataCoordinates
-                        markerDiff = fieldmodule.createFieldSubtract(dataCoordinates, modelCoordinatesTransformed)
-                        scaledMarkerDiff = markerDiff*fieldmodule.createFieldConstant([ 1.0/translationScaleFactor]*3)
-                        objective = fieldmodule.createFieldNodesetSumSquares(scaledMarkerDiff, nodes)
-                        # objective = fieldmodule.createFieldNodesetSum(fieldmodule.createFieldMagnitude(scaledMarkerDiff), nodes)
+                        rotation.assignReal(fieldcache, rotationAngles)
+                        rotationMatrix = euler_to_rotation_matrix(rotationAngles)
+                        translationFix = mult(sub(matrix_vector_mult(rotationMatrix, modelCM), modelCM), scaleFactor)
+                        translation.assignReal(fieldcache, sub(translationOffset, translationFix))
                         result, objectiveValues = objective.evaluateReal(fieldcache, 3)
                         objectiveValue = sum(objectiveValues)
 
                         if first or (objectiveValue < minObjectiveValue):
                             first = False
                             minObjectiveValue = objectiveValue
-                            # store other values
-                            minObjective = objective
-                            minRotation = rotation
-                            minScale = scale
-                            minTranslation = translation
+                            minRotationAngles = rotationAngles
+                            minTranslationMatrix = sub(translationOffset, translationFix)
 
-            assert minObjective.isValid(), "Align:  Failed to set up objective function for alignment to markers optimisation"
+            rotation.assignReal(fieldcache, minRotationAngles)
+            translation.assignReal(fieldcache, minTranslationMatrix)
+
+            assert objective.isValid(), "Align:  Failed to set up objective function for alignment to markers optimisation"
 
         optimisation = fieldmodule.createOptimisation()
         optimisation.setMethod(Optimisation.METHOD_LEAST_SQUARES_QUASI_NEWTON)
         #optimisation.setMethod(Optimisation.METHOD_QUASI_NEWTON)
-        optimisation.addObjectiveField(minObjective)
-        optimisation.addDependentField(minRotation)
-        optimisation.addDependentField(minScale)
-        optimisation.addDependentField(minTranslation)
+        optimisation.addObjectiveField(objective)
+        optimisation.addDependentField(rotation)
+        optimisation.addDependentField(scale)
+        optimisation.addDependentField(translation)
 
         #FunctionTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_FUNCTION_TOLERANCE)
         #GradientTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_GRADIENT_TOLERANCE)
@@ -391,9 +394,9 @@ class FitterStepAlign(FitterStep):
             print(solutionReport)
         assert result == RESULT_OK, "Align:  Alignment to markers optimisation failed"
 
-        result1, self._rotation = minRotation.evaluateReal(fieldcache, 3)
-        result2, self._scale = minScale.evaluateReal(fieldcache, 1)
-        result3, self._translation = minTranslation.evaluateReal(fieldcache, 3)
+        result1, self._rotation = rotation.evaluateReal(fieldcache, 3)
+        result2, self._scale = scale.evaluateReal(fieldcache, 1)
+        result3, self._translation = translation.evaluateReal(fieldcache, 3)
         self._translation = [ s*translationScaleFactor for s in self._translation ]
         assert (result1 == RESULT_OK) and (result2 == RESULT_OK) and (result3 == RESULT_OK), "Align:  Failed to evaluate transformation for alignment to markers"
 

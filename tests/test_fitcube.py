@@ -7,7 +7,7 @@ from opencmiss.zinc.node import Nodeset
 from opencmiss.zinc.result import RESULT_OK
 from scaffoldfitter.fitter import Fitter
 from scaffoldfitter.fitterjson import decodeJSONFitterSteps
-from scaffoldfitter.fitterstepalign import FitterStepAlign
+from scaffoldfitter.fitterstepalign import FitterStepAlign, createFieldsTransformations
 from scaffoldfitter.fitterstepconfig import FitterStepConfig
 from scaffoldfitter.fitterstepfit import FitterStepFit
 
@@ -528,6 +528,59 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         self.assertTrue("top" in groupNames)
         self.assertEqual((0.25, False, True), config2.getGroupDataProportion("sides"))
         self.assertEqual((1.0, None, True), config2.getGroupDataProportion("top"))
+
+    def test_preAlignment(self):
+        """
+        Test prealignment step to ensure models at different translation, scale and rotation all return close
+        to same aligned model.
+        """
+        zinc_model_file = os.path.join(here, "resources", "cube_to_sphere.exf")
+        zinc_data_file = os.path.join(here, "resources", "cube_to_sphere_data_random.exf")
+        fitter = Fitter(zinc_model_file, zinc_data_file)
+        self.assertEqual(1, len(fitter.getFitterSteps()))
+        fitter.setDiagnosticLevel(1)
+
+        # Rotation, scale, translation
+        transformationList = [[[ 0.0, 0.0, 0.0 ], 1.0, [ 0.0, 0.0, 0.0 ]],
+                              [[ math.pi * 20/180, 0.0, 0.0 ], 1.0, [ 0.0, 0.0, 0.0 ]],
+                              [[ math.pi * 135/180, 0.0, 0.0 ], 1.0, [ 0.0, 0.0, 0.0 ]],
+                              [[ math.pi * 250/180, math.pi * -45/180, 0.0 ], 1.0, [ 0.0, 0.0, 0.0 ]],
+                              [[ math.pi * 45/180, math.pi * 45/180, math.pi * 45/180 ], 1.0, [ 0.0, 0.0, 0.0 ]],
+                              [[ 0.0, 0.0, 0.0 ], 0.05, [ 0.0, 0.0, 0.0]],
+                              [[ math.pi * 70/180, math.pi * 10/180, math.pi * -300/180 ], 0.2, [ 0.0, 0.0, 0.0 ]],
+                              [[ 0.0, 0.0, 0.0 ], 1.0, [ 15.0, 15.0, 15.0 ]],
+                              [[ 0.0, 0.0, 0.0 ], 20.0, [ 50.0, 0.0, 10.0 ]],
+                              [[ math.pi * 90/180, math.pi * 200/180, math.pi * 5/180 ], 1.0, [ -10.0, -20.0, 100.0 ]],
+                              [[ math.pi * -45/180, math.pi * 120/180, math.pi * 10/180 ], 500.0, [ 100.0, 100.0, 100.0 ]]]
+
+        for i in range(len(transformationList)):
+            fitter.load()
+            modelCoordinates = fitter.getModelCoordinatesField()
+            rotation = transformationList[i][0]
+            scale = transformationList[i][1]
+            translation = transformationList[i][2]
+            modelCoordinatesTransformed = createFieldsTransformations(modelCoordinates, rotation, scale, translation)[0]
+            fieldassignment = modelCoordinates.createFieldassignment(modelCoordinatesTransformed)
+            fieldassignment.assign()
+
+            align = FitterStepAlign()
+            fitter.addFitterStep(align)
+            self.assertTrue(align.setAlignGroups(True))
+            self.assertTrue(align.isAlignGroups())
+            align.run()
+
+            if i == 0:
+                bottomCentre2Default = fitter.evaluateNodeGroupMeanCoordinates("bottom", "coordinates", isData=False)
+                sidesCentre2Default = fitter.evaluateNodeGroupMeanCoordinates("sides", "coordinates", isData=False)
+                topCentre2Default = fitter.evaluateNodeGroupMeanCoordinates("top", "coordinates", isData=False)
+
+            bottomCentre2 = fitter.evaluateNodeGroupMeanCoordinates("bottom", "coordinates", isData=False)
+            sidesCentre2 = fitter.evaluateNodeGroupMeanCoordinates("sides", "coordinates", isData=False)
+            topCentre2 = fitter.evaluateNodeGroupMeanCoordinates("top", "coordinates", isData=False)
+
+            assertAlmostEqualList(self, bottomCentre2, bottomCentre2Default, delta=1.0E-4)
+            assertAlmostEqualList(self, sidesCentre2, sidesCentre2Default, delta=1.0E-4)
+            assertAlmostEqualList(self, topCentre2, topCentre2Default, delta=1.0E-4)
 
 if __name__ == "__main__":
     unittest.main()
