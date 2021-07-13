@@ -299,9 +299,9 @@ class FitterStepAlign(FitterStep):
                     dataMin[c] = min(datax[c], dataMin[c])
                     dataMax[c] = max(datax[c], dataMax[c])
 
-            groupCount = len(pointMap)
-            modelCM = [(c / groupCount) for c in modelsum]
-            dataCM = [(c / groupCount) for c in datasum]
+            groupScale = 1.0 / len(pointMap)
+            modelCM = [(s * groupScale) for s in modelsum]
+            dataCM = [(s * groupScale) for s in datasum]
             translationOffset = [(dataCM[c] - modelCM[c]) for c in range(3)]
 
             modelSpan = [(modelMax[c] - modelMin[c]) for c in range(3)]
