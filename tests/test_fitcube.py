@@ -582,21 +582,13 @@ class FitCubeToSphereTestCase(unittest.TestCase):
             fieldassignment.assign()
 
             align.run()
-
             nodeset = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
-            nodeIter = nodeset.createNodeiterator()
-            node = nodeIter.next()
-            fieldcache.setNode(node)
 
-            while node.isValid():
-                identifier = node.getIdentifier()
-                if identifier < 9:
-                    fieldcache.setNode(node)
-                    result, x = modelCoordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, 3)
-                    assertAlmostEqualList(self, x, expectedAlignedNodes[identifier - 1], delta=1.0E-3)
-                    node = nodeIter.next()
-                else:
-                    break
+            for nodeIdentifier in range(1, 9):
+                node = nodeset.findNodeByIdentifier(nodeIdentifier)
+                fieldcache.setNode(node)
+                result, x = modelCoordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, 3)
+                assertAlmostEqualList(self, x, expectedAlignedNodes[nodeIdentifier - 1], delta=1.0E-3)
 
 if __name__ == "__main__":
     unittest.main()
