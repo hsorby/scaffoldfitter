@@ -562,12 +562,18 @@ class FitCubeToSphereTestCase(unittest.TestCase):
                                 [1.10662916138482e-05, 0.5690355905820392, 0.4023689227420698],
                                 [0.5690355838778464, -1.1070891856158648e-05, 0.4023689241682007]]
 
+        align = FitterStepAlign()
+        fitter.addFitterStep(align)
+        self.assertTrue(align.setAlignMarkers(True))
+        self.assertTrue(align.isAlignMarkers())
+
         for i in range(len(transformationList)):
             fitter.load()
+
             fieldmodule = fitter.getFieldmodule()
             fieldcache = fieldmodule.createFieldcache()
-
             modelCoordinates = fitter.getModelCoordinatesField()
+
             rotation = transformationList[i][0]
             scale = transformationList[i][1]
             translation = transformationList[i][2]
@@ -575,10 +581,6 @@ class FitCubeToSphereTestCase(unittest.TestCase):
             fieldassignment = modelCoordinates.createFieldassignment(modelCoordinatesTransformed)
             fieldassignment.assign()
 
-            align = FitterStepAlign()
-            fitter.addFitterStep(align)
-            self.assertTrue(align.setAlignMarkers(True))
-            self.assertTrue(align.isAlignMarkers())
             align.run()
 
             nodeset = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
