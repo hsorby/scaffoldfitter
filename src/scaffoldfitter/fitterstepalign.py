@@ -340,10 +340,10 @@ class FitterStepAlign(FitterStep):
                             first = False
                             minObjectiveValue = objectiveValue
                             minRotationAngles = rotationAngles
-                            minTranslationMatrix = sub(translationOffset, translationFix)
+                            minTranslation = sub(translationOffset, translationFix)
 
             rotation.assignReal(fieldcache, minRotationAngles)
-            translation.assignReal(fieldcache, minTranslationMatrix)
+            translation.assignReal(fieldcache, minTranslation)
 
             assert objective.isValid(), "Align:  Failed to set up objective function for alignment to markers optimisation"
 
