@@ -565,8 +565,8 @@ class FitCubeToSphereTestCase(unittest.TestCase):
 
             align = FitterStepAlign()
             fitter.addFitterStep(align)
-            self.assertTrue(align.setAlignGroups(True))
-            self.assertTrue(align.isAlignGroups())
+            self.assertTrue(align.setAlignMarkers(True))
+            self.assertTrue(align.isAlignMarkers())
             align.run()
 
             if i == 0:
