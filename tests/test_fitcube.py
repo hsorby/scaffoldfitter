@@ -3,7 +3,7 @@ import os
 import unittest
 from opencmiss.utils.zinc.field import createFieldMeshIntegral
 from opencmiss.zinc.field import Field
-from opencmiss.zinc.node import Nodeset
+from opencmiss.zinc.node import Node, Nodeset
 from opencmiss.zinc.result import RESULT_OK
 from scaffoldfitter.fitter import Fitter
 from scaffoldfitter.fitterjson import decodeJSONFitterSteps
@@ -553,8 +553,20 @@ class FitCubeToSphereTestCase(unittest.TestCase):
                               [[ math.pi * 90/180, math.pi * 200/180, math.pi * 5/180 ], 1.0, [ -10.0, -20.0, 100.0 ]],
                               [[ math.pi * -45/180, math.pi * 120/180, math.pi * 10/180 ], 500.0, [ 100.0, 100.0, 100.0 ]]]
 
+        expectedAlignedNodes = [[-0.5690355951820659, 1.1070979208244695e-05, -0.40236892417087866],
+                                [-1.1077595833408616e-05, -0.5690355904946871, -0.4023689227447479],
+                                [1.1066291829453512e-05, 0.5690355885654408, -0.4023689255966489],
+                                [0.569035583878062, -1.1072908454692232e-05, -0.4023689241705181],
+                                [-0.5690355951822816, 1.1072995806778281e-05, 0.4023689241678401],
+                                [-1.107759604912495e-05, -0.5690355884780887, 0.40236892559397086],
+                                [1.10662916138482e-05, 0.5690355905820392, 0.4023689227420698],
+                                [0.5690355838778464, -1.1070891856158648e-05, 0.4023689241682007]]
+
         for i in range(len(transformationList)):
             fitter.load()
+            fieldmodule = fitter.getFieldmodule()
+            fieldcache = fieldmodule.createFieldcache()
+
             modelCoordinates = fitter.getModelCoordinatesField()
             rotation = transformationList[i][0]
             scale = transformationList[i][1]
@@ -569,18 +581,20 @@ class FitCubeToSphereTestCase(unittest.TestCase):
             self.assertTrue(align.isAlignMarkers())
             align.run()
 
-            if i == 0:
-                bottomCentre2Default = fitter.evaluateNodeGroupMeanCoordinates("bottom", "coordinates", isData=False)
-                sidesCentre2Default = fitter.evaluateNodeGroupMeanCoordinates("sides", "coordinates", isData=False)
-                topCentre2Default = fitter.evaluateNodeGroupMeanCoordinates("top", "coordinates", isData=False)
+            nodeset = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+            nodeIter = nodeset.createNodeiterator()
+            node = nodeIter.next()
+            fieldcache.setNode(node)
 
-            bottomCentre2 = fitter.evaluateNodeGroupMeanCoordinates("bottom", "coordinates", isData=False)
-            sidesCentre2 = fitter.evaluateNodeGroupMeanCoordinates("sides", "coordinates", isData=False)
-            topCentre2 = fitter.evaluateNodeGroupMeanCoordinates("top", "coordinates", isData=False)
-
-            assertAlmostEqualList(self, bottomCentre2, bottomCentre2Default, delta=1.0E-4)
-            assertAlmostEqualList(self, sidesCentre2, sidesCentre2Default, delta=1.0E-4)
-            assertAlmostEqualList(self, topCentre2, topCentre2Default, delta=1.0E-4)
+            while node.isValid():
+                identifier = node.getIdentifier()
+                if identifier < 9:
+                    fieldcache.setNode(node)
+                    result, x = modelCoordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, 3)
+                    assertAlmostEqualList(self, x, expectedAlignedNodes[identifier - 1], delta=1.0E-3)
+                    node = nodeIter.next()
+                else:
+                    break
 
 if __name__ == "__main__":
     unittest.main()
