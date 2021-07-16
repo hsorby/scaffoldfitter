@@ -470,8 +470,29 @@ class FitterStepFit(FitterStep):
         #linearDataScale = self._fitter.getDataScale()
         #for d in range(dimension):
         #    dataScale /= linearDataScale
-
-        displacementGradient1, displacementGradient2 = createFieldsDisplacementGradients(self._fitter.getModelCoordinatesField(), self._fitter.getModelReferenceCoordinatesField(), mesh)
+        modelCoordinates = self._fitter.getModelCoordinatesField()
+        modelReferenceCoordinates = self._fitter.getModelReferenceCoordinatesField()
+        fibreField = self._fitter.getFibreField()
+        dimension = mesh.getDimension()
+        coordinatesCount = modelCoordinates.getNumberOfComponents()
+        zincVersion = self._fitter.getZincVersion()
+        #zincVersion34 = (zincVersion[0] > 3) or ((zincVersion[0] == 3) and (zincVersion[1] >= 4))
+        assert coordinatesCount == dimension, \
+            "Fit strain/curvature penalties cannot be applied as element dimension < coordinate components. "
+        displacement = modelCoordinates - modelReferenceCoordinates
+        displacementGradient1 = displacementGradient1raw = fieldmodule.createFieldGradient(displacement, modelReferenceCoordinates)
+        if fibreField:
+            # convert to local fibre directions, with possible dimension reduction for 2D, 1D
+            fibreAxes = fieldmodule.createFieldFibreAxes(fibreField, modelReferenceCoordinates)
+            if dimension == 3:
+                fibreAxesT = fieldmodule.createFieldTranspose(3, fibreAxes)
+            elif dimension == 2:
+                fibreAxesT = fieldmodule.createFieldComponent(fibreAxes, \
+                    [1, 4, 2, 5, 3, 6] if (coordinatesCount == 3) else [1, 4, 2, 5])
+            else:  # dimension == 1
+                fibreAxesT = fieldmodule.createFieldComponent(fibreAxes, \
+                    [1, 2, 3] if (coordinatesCount == 3) else [1, 2] if (coordinatesCount == 2) else [1])
+            displacementGradient1 = fieldmodule.createFieldMatrixMultiply(coordinatesCount, displacementGradient1, fibreAxesT)
         deformationTerm = None
         if strainActiveMeshGroup.getSize() > 0:
             alpha = self._fitter.getStrainPenaltyField()
@@ -479,6 +500,24 @@ class FitterStepFit(FitterStep):
             assert wtSqDeformationGradient1.isValid()
             deformationTerm = wtSqDeformationGradient1
         if curvatureActiveMeshGroup.getSize() > 0:
+            # don't do gradient of displacementGradient1 with fibres due to slow finite difference evaluation
+            displacementGradient2 = fieldmodule.createFieldGradient(displacementGradient1raw, modelReferenceCoordinates)
+            if fibreField:
+                # convert to local fibre directions
+                displacementGradient2a = fieldmodule.createFieldMatrixMultiply(coordinatesCount*coordinatesCount, displacementGradient2, fibreAxesT)
+                # transpose each displacement component of displacementGradient2a to remultiply by fibreAxesT
+                if dimension == 1:
+                    displacementGradient2aT = displacementGradient2a
+                else:
+                    if coordinatesCount == 3:
+                        if dimension == 3:
+                            transposeComponents = [1, 4, 7, 2, 5, 8, 3, 6, 9, 10, 13, 16, 11, 14, 17, 12, 15, 18, 19, 22, 25, 20, 23, 26, 21, 24, 27]
+                        elif dimension == 2:
+                            transposeComponents = [1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12, 13, 15, 17, 14, 16, 18]
+                    elif coordinatesCount == 2:
+                        transposeComponents = [1, 3, 2, 4, 5, 7, 6, 8]
+                    displacementGradient2aT = fieldmodule.createFieldComponent(displacementGradient2a, transposeComponents)
+                displacementGradient2 = fieldmodule.createFieldMatrixMultiply(dimension*coordinatesCount, displacementGradient2aT, fibreAxesT)
             beta = self._fitter.getCurvaturePenaltyField()
             wtSqDeformationGradient2 = fieldmodule.createFieldDotProduct(beta, displacementGradient2*displacementGradient2)
             assert wtSqDeformationGradient2.isValid()

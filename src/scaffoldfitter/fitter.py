@@ -3,6 +3,7 @@ Main class for fitting scaffolds.
 """
 
 import json
+import sys
 from opencmiss.utils.maths.vectorops import sub
 from opencmiss.utils.zinc.field import assignFieldParameters, createFieldFiniteElementClone, getGroupList, getManagedFieldNames, \
     findOrCreateFieldFiniteElement, findOrCreateFieldGroup, findOrCreateFieldNodeGroup, findOrCreateFieldStoredMeshLocation, \
@@ -27,6 +28,7 @@ class Fitter:
         self._zincModelFileName = zincModelFileName
         self._zincDataFileName = zincDataFileName
         self._context = Context("Scaffoldfitter")
+        self._zincVersion = self._context.getVersion()[1]
         self._logger = self._context.getLogger()
         self._region = None
         self._rawDataRegion = None
@@ -36,6 +38,9 @@ class Fitter:
         self._modelReferenceCoordinatesField = None
         self._dataCoordinatesField = None
         self._dataCoordinatesFieldName = None
+        # fibre field is used to orient strain/curvature penalties. None=global axes
+        self._fibreField = None
+        self._fibreFieldName = None
         self._mesh = []  # [dimension - 1]
         self._dataHostLocationField = None  # stored mesh location field in highest dimension mesh for all data and markers
         self._dataHostCoordinatesField = None  # embedded field giving host coordinates at data location
@@ -82,9 +87,11 @@ class Fitter:
         # self._fitterSteps will already be populated by decoder
         # ensure there is a first config step:
         if (len(self._fitterSteps) > 0) and isinstance(self._fitterSteps[0], FitterStepConfig):
-            self._modelCoordinatesFieldName = dct["modelCoordinatesField"]
-            self._dataCoordinatesFieldName = dct["dataCoordinatesField"]
-            self._markerGroupName = dct["markerGroup"]
+            # field names are read (default to None), fields are found on load
+            self._modelCoordinatesFieldName = dct.get("modelCoordinatesField")
+            self._dataCoordinatesFieldName = dct.get("dataCoordinatesField")
+            self._fibreFieldName = dct.get("fibreField")
+            self._markerGroupName = dct.get("markerGroup")
             self._diagnosticLevel = dct["diagnosticLevel"]
         else:
             self._fitterSteps = oldFitterSteps
@@ -97,6 +104,7 @@ class Fitter:
         dct = {
             "modelCoordinatesField" : self._modelCoordinatesFieldName,
             "dataCoordinatesField" : self._dataCoordinatesFieldName,
+            "fibreField" : self._fibreFieldName,
             "markerGroup" : self._markerGroupName,
             "diagnosticLevel" : self._diagnosticLevel,
             "fitterSteps" : [ fitterStep.encodeSettingsJSONDict() for fitterStep in self._fitterSteps ]
@@ -169,6 +177,7 @@ class Fitter:
         self._modelCoordinatesField = None
         self._modelReferenceCoordinatesField = None
         self._dataCoordinatesField = None
+        self._fibreField = None
         self._mesh = []  # [dimension - 1]
         self._dataHostLocationField = None  # stored mesh location field in highest dimension mesh for all data and markers
         self._dataHostCoordinatesField = None  # embedded field giving host coordinates at data location
@@ -181,7 +190,6 @@ class Fitter:
         self._dataProjectionNodesetGroups = []  # [dimension - 1]
         self._dataProjectionDirectionField = None  # for storing original projection direction unit vector
         self._markerGroup = None
-        self._markerGroupName = None
         self._markerNodeGroup = None
         self._markerLocationField = None
         self._markerNameField = None
@@ -287,6 +295,7 @@ class Fitter:
         assert result == RESULT_OK, "Failed to load model file" + str(self._zincModelFileName)
         self._mesh = [ self._fieldmodule.findMeshByDimension(d + 1) for d in range(3) ]
         self._discoverModelCoordinatesField()
+        self._discoverFibreField()
         self._defineCommonMeshFields()
 
     def _defineCommonDataFields(self):
@@ -810,6 +819,40 @@ class Fitter:
         if field:
             self.setModelCoordinatesField(field)
 
+    def getFibreField(self):
+        return self._fibreField
+
+    def setFibreField(self, fibreField : Field):
+        """
+        Set field used to orient strain and curvature penalties relative to element.
+        :param fibreField: Fibre angles field available on elements, or None to use
+        global x, y, z axes.
+        """
+        assert (fibreField is None) or ((fibreField.getValueType() == Field.VALUE_TYPE_REAL) and \
+            (fibreField.getNumberOfComponents() <= 3)), "Scaffoldfitter: Invalid fibre field"
+        self._fibreField = fibreField
+        self._fibreFieldName = fibreField.getName() if (fibreField) else None
+
+    def _discoverFibreField(self):
+        """
+        Find field used to orient strain and curvature penalties, if any.
+        """
+        self._fibreField = None
+        fibreField = None
+        # guarantee a zero fibres field exists
+        zeroFibreFieldName = "zero fibres"
+        zeroFibreField = self._fieldmodule.findFieldByName(zeroFibreFieldName)
+        if not zeroFibreField.isValid():
+            with ChangeManager(self._fieldmodule):
+                zeroFibreField = self._fieldmodule.createFieldConstant([0.0, 0.0, 0.0])
+                zeroFibreField.setName(zeroFibreFieldName)
+                zeroFibreField.setManaged(True)
+        if self._fibreFieldName:
+            fibreField = self._fieldmodule.findFieldByName(self._fibreFieldName)
+        if not (fibreField and fibreField.isValid()):
+            fibreField = None  # in future, could be zeroFibreField?
+        self.setFibreField(fibreField)
+
     def _defineDataProjectionFields(self):
         self._dataProjectionGroupNames = []
         self._dataProjectionNodeGroupFields = []
@@ -1046,6 +1089,12 @@ class Fitter:
 
     def getContext(self):
         return self._context
+
+    def getZincVersion(self):
+        """
+        :return: zinc version numbers [major, minor, patch].
+        """
+        return self._zincVersion
 
     def getRegion(self):
         return self._region

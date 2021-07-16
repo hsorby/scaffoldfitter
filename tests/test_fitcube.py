@@ -301,6 +301,33 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         self.assertEqual(result, RESULT_OK)
         self.assertAlmostEqual(volume, 2.323461787566051, delta=1.0E-4)
 
+        # test fibre orientation field
+        fitter.load()
+        fieldmodule = fitter.getFieldmodule()
+        self.assertEqual(None, fitter.getFibreField())
+        fibreField = fieldmodule.createFieldConstant([0.0, 0.0, 0.25*math.pi])
+        fibreField.setName("custom fibres")
+        fibreField.setManaged(True)
+        fitter.setFibreField(fibreField)
+        self.assertEqual(fibreField, fitter.getFibreField())
+        coordinates = fitter.getModelCoordinatesField()
+        align.run()
+        fit1.run()
+        # get end node coordinate to prove twist 
+        nodeExpectedCoordinates = {
+            3: [0.8487623099139301, -0.5012613734076182, -0.5306482017126274],
+            6: [0.8487623092159226, 0.2617063557585618, -0.5464896371028911],
+            9: [0.8487623062422882, -0.2617063537282271, 0.5464896401724635],
+            12: [0.8487623124370356, 0.5012613792923117, 0.5306482045212996]}
+        fieldcache = fieldmodule.createFieldcache()
+        nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+        for nodeIdentifier, expectedCoordinates in nodeExpectedCoordinates.items():
+            node = nodes.findNodeByIdentifier(nodeIdentifier)
+            self.assertEqual(RESULT_OK, fieldcache.setNode(node))
+            result, x = coordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, 3)
+            self.assertEqual(RESULT_OK, result)
+            assertAlmostEqualList(self, x, expectedCoordinates, delta=1.0E-6)
+
         # test inheritance and override of penalties
         fit2 = FitterStepFit()
         fitter.addFitterStep(fit2)
@@ -355,6 +382,7 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         s2 = fitter.encodeSettingsJSON()
         self.assertEqual(s, s2)
 
+
     def test_fitRegularDataGroupWeight(self):
         """
         Test automatic alignment of model and data using fiducial markers.
@@ -393,7 +421,6 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fit1.setUpdateReferenceState(True)
         fit1.run()
         dataWeightField = fieldmodule.findFieldByName("data_weight").castFiniteElement()
-        print('dataWeightField', dataWeightField.isValid())
         self.assertTrue(dataWeightField.isValid())
         groupData = { "bottom" : ( 72, 0.5 ), "sides" : ( 144, 0.1 ), "top" : ( 72, 1.0 ) }
         mesh2d = fitter.getMesh(2)
