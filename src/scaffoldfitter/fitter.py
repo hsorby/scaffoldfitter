@@ -3,7 +3,7 @@ Main class for fitting scaffolds.
 """
 
 import json
-from opencmiss.utils.maths.vectorops import sub
+from opencmiss.maths.vectorops import sub
 from opencmiss.utils.zinc.field import assignFieldParameters, createFieldFiniteElementClone, getGroupList, getManagedFieldNames, \
     findOrCreateFieldFiniteElement, findOrCreateFieldGroup, findOrCreateFieldNodeGroup, findOrCreateFieldStoredMeshLocation, \
     getUniqueFieldName, orphanFieldByName
