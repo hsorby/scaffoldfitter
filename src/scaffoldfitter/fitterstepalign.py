@@ -4,7 +4,7 @@ Fit step for gross alignment and scale.
 
 import copy
 import math
-from opencmiss.utils.maths.vectorops import div, euler_to_rotation_matrix, matrix_vector_mult, mult, sub
+from opencmiss.maths.vectorops import div, euler_to_rotation_matrix, matrix_vector_mult, mult, sub
 from opencmiss.utils.zinc.field import assignFieldParameters, get_group_list, create_field_euler_angles_rotation_matrix
 from opencmiss.utils.zinc.finiteelement import evaluate_field_nodeset_mean, getNodeNameCentres
 from opencmiss.utils.zinc.general import ChangeManager
