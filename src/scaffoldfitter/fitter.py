@@ -1186,20 +1186,31 @@ class Fitter:
     def writeModel(self, modelFileName):
         """
         Write model nodes and elements with model coordinates field to file.
+        Note: Output field name is prefixed with "fitted ".
         """
-        sir = self._region.createStreaminformationRegion()
-        sir.setRecursionMode(sir.RECURSION_MODE_OFF)
-        srf = sir.createStreamresourceFile(modelFileName)
-        sir.setResourceFieldNames(srf, [self._modelCoordinatesFieldName])
-        sir.setResourceDomainTypes(srf, Field.DOMAIN_TYPE_NODES |
-                                   Field.DOMAIN_TYPE_MESH1D | Field.DOMAIN_TYPE_MESH2D | Field.DOMAIN_TYPE_MESH3D)
-        result = self._region.write(sir)
-        # loggerMessageCount = self._logger.getNumberOfMessages()
-        # if loggerMessageCount > 0:
-        #    for i in range(1, loggerMessageCount + 1):
-        #        print(self._logger.getMessageTypeAtIndex(i), self._logger.getMessageTextAtIndex(i))
-        #    self._logger.removeAllMessages()
-        assert result == RESULT_OK
+        with ChangeManager(self._fieldmodule):
+            # temporarily rename model coordinates field to prefix with "fitted "
+            # so can be used along with original coordinates in later steps
+            outputCoordinatesFieldName = "fitted " + self._modelCoordinatesFieldName;
+            self._modelCoordinatesField.setName(outputCoordinatesFieldName)
+
+            sir = self._region.createStreaminformationRegion()
+            sir.setRecursionMode(sir.RECURSION_MODE_OFF)
+            srf = sir.createStreamresourceFile(modelFileName)
+            sir.setResourceFieldNames(srf, [outputCoordinatesFieldName])
+            sir.setResourceDomainTypes(srf, Field.DOMAIN_TYPE_NODES |
+                                       Field.DOMAIN_TYPE_MESH1D | Field.DOMAIN_TYPE_MESH2D | Field.DOMAIN_TYPE_MESH3D)
+            result = self._region.write(sir)
+            # loggerMessageCount = self._logger.getNumberOfMessages()
+            # if loggerMessageCount > 0:
+            #    for i in range(1, loggerMessageCount + 1):
+            #        print(self._logger.getMessageTypeAtIndex(i), self._logger.getMessageTextAtIndex(i))
+            #    self._logger.removeAllMessages()
+
+            # restore original name
+            self._modelCoordinatesField.setName(self._modelCoordinatesFieldName)
+
+            assert result == RESULT_OK
 
     def writeData(self, fileName):
         sir = self._region.createStreaminformationRegion()
