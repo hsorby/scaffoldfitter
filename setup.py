@@ -21,8 +21,9 @@ readme = readfile("README.rst", split=True)[3:]  # skip title
 # into the 'requirements.txt' file.
 requires = [
     # minimal requirements listing
+    "opencmiss.math",
     "opencmiss.utils >= 0.3",
-    "opencmiss.zinc"
+    "opencmiss.zinc >= 3.4"
 ]
 source_license = readfile("LICENSE")
 
