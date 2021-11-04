@@ -11,7 +11,8 @@ import sys
 
 class FitterStepFit(FitterStep):
 
-    _jsonTypeId = "_FitterStepFit"
+    _name = "Fit"
+    _jsonTypeId = f"_FitterStep{_name}"
     _dataWeightToken = "dataWeight"
     _strainPenaltyToken = "strainPenalty"
     _curvaturePenaltyToken = "curvaturePenalty"

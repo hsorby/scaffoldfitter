@@ -8,7 +8,8 @@ import sys
 
 class FitterStepConfig(FitterStep):
 
-    _jsonTypeId = "_FitterStepConfig"
+    _name = "Config"
+    _jsonTypeId = f"_FitterStep{_name}"
     _centralProjectionToken = "centralProjection"
     _dataProportionToken = "dataProportion"
 

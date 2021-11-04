@@ -39,12 +39,21 @@ def createFieldsTransformations(coordinates: Field, rotation_angles=None, scale_
     fieldmodule = coordinates.getFieldmodule()
     with ChangeManager(fieldmodule):
         # Rotate, scale, and translate model, in that order
-        rotation = fieldmodule.createFieldConstant(rotation_angles)
-        scale = fieldmodule.createFieldConstant(scale_value)
+        rot = euler_to_rotation_matrix(rotation_angles)
+        # rotation = fieldmodule.createFieldConstant(rotation_angles)
+        # scale = fieldmodule.createFieldConstant(scale_value)
+        scale = scale_value
         translation = fieldmodule.createFieldConstant(translation_offsets)
-        rotation_matrix = create_field_euler_angles_rotation_matrix(fieldmodule, rotation)
-        rotated_coordinates = fieldmodule.createFieldMatrixMultiply(components_count, rotation_matrix, coordinates)
-        transformed_coordinates = rotated_coordinates * scale + (
+        rotation_scale = [
+            rot[0][0] * scale, rot[0][1] * scale, rot[0][2] * scale,
+            rot[1][0] * scale, rot[1][1] * scale, rot[1][2] * scale,
+            rot[2][0] * scale, rot[2][1] * scale, rot[2][2] * scale]
+        rotation = fieldmodule.createFieldConstant(rotation_scale)
+        rotated_scaled_coordinates = fieldmodule.createFieldMatrixMultiply(3, rotation, coordinates)
+        # transformed_coordinates = fieldmodule.createFieldAdd(temp1, translation)
+        # rotation_matrix = create_field_euler_angles_rotation_matrix(fieldmodule, rotation)
+        # rotated_coordinates = fieldmodule.createFieldMatrixMultiply(components_count, rotation_matrix, coordinates)
+        transformed_coordinates = rotated_scaled_coordinates + (
             translation if (translation_scale_factor == 1.0) else
             translation * fieldmodule.createFieldConstant([translation_scale_factor] * components_count))
         assert transformed_coordinates.isValid()
@@ -53,7 +62,8 @@ def createFieldsTransformations(coordinates: Field, rotation_angles=None, scale_
 
 class FitterStepAlign(FitterStep):
 
-    _jsonTypeId = "_FitterStepAlign"
+    _name = "Align"
+    _jsonTypeId = f"_FitterStep{_name}"
 
     def __init__(self):
         super(FitterStepAlign, self).__init__()
@@ -185,7 +195,7 @@ class FitterStepAlign(FitterStep):
             # rotate, scale and translate model
             modelCoordinatesTransformed = createFieldsTransformations(
                 modelCoordinates, self._rotation, self._scale, self._translation)[0]
-            fieldassignment = self._fitter.getModelCoordinatesField().createFieldassignment(modelCoordinatesTransformed)
+            fieldassignment = modelCoordinates.createFieldassignment(modelCoordinatesTransformed)
             result = fieldassignment.assign()
             assert result in [RESULT_OK, RESULT_WARNING_PART_DONE], "Align:  Failed to transform model"
             self._fitter.updateModelReferenceCoordinates()

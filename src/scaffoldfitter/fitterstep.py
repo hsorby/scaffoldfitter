@@ -4,10 +4,11 @@ Base class for fitter steps.
 import abc
 
 
-class FitterStep:
+class FitterStep(object):
     """
     Base class for fitter steps.
     """
+    _name = 'Base'
     _defaultGroupName = "<default>"
 
     def __init__(self):
@@ -44,6 +45,10 @@ class FitterStep:
     @abc.abstractmethod
     def getJsonTypeId(cls):
         pass
+
+    @classmethod
+    def getName(cls):
+        return cls._name
 
     def decodeSettingsJSONDict(self, dctIn: dict):
         """
