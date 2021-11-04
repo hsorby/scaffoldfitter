@@ -1,9 +1,9 @@
 """
 Fit step for gross alignment and scale.
 """
-
 import copy
 import math
+
 from opencmiss.maths.vectorops import div, euler_to_rotation_matrix, matrix_vector_mult, mult, sub
 from opencmiss.utils.zinc.field import get_group_list, create_field_euler_angles_rotation_matrix
 from opencmiss.utils.zinc.finiteelement import evaluate_field_nodeset_mean, getNodeNameCentres
@@ -35,7 +35,7 @@ def createFieldsTransformations(coordinates: Field, rotation_angles=None, scale_
         translation_offsets = [0.0, 0.0, 0.0]
     components_count = coordinates.getNumberOfComponents()
     assert (components_count == 3) and (len(rotation_angles) == components_count) and isinstance(scale_value, float) \
-        and (len(translation_offsets) == components_count), "createFieldsTransformations.  Invalid arguments"
+           and (len(translation_offsets) == components_count), "createFieldsTransformations.  Invalid arguments"
     fieldmodule = coordinates.getFieldmodule()
     with ChangeManager(fieldmodule):
         # Rotate, scale, and translate model, in that order
@@ -44,9 +44,9 @@ def createFieldsTransformations(coordinates: Field, rotation_angles=None, scale_
         translation = fieldmodule.createFieldConstant(translation_offsets)
         rotation_matrix = create_field_euler_angles_rotation_matrix(fieldmodule, rotation)
         rotated_coordinates = fieldmodule.createFieldMatrixMultiply(components_count, rotation_matrix, coordinates)
-        transformed_coordinates = rotated_coordinates*scale + (
+        transformed_coordinates = rotated_coordinates * scale + (
             translation if (translation_scale_factor == 1.0) else
-            translation*fieldmodule.createFieldConstant([translation_scale_factor]*components_count))
+            translation * fieldmodule.createFieldConstant([translation_scale_factor] * components_count))
         assert transformed_coordinates.isValid()
     return transformed_coordinates, rotation, scale, translation
 
@@ -93,7 +93,8 @@ class FitterStepAlign(FitterStep):
             "rotation": self._rotation,
             "scale": self._scale,
             "translation": self._translation
-            })
+        })
+
         return dct
 
     def isAlignGroups(self):
@@ -401,7 +402,7 @@ class FitterStepAlign(FitterStep):
         result1, self._rotation = rotation.evaluateReal(fieldcache, 3)
         result2, self._scale = scale.evaluateReal(fieldcache, 1)
         result3, self._translation = translation.evaluateReal(fieldcache, 3)
-        self._translation = [s*translationScaleFactor for s in self._translation]
+        self._translation = [s * translationScaleFactor for s in self._translation]
         assert (result1 == RESULT_OK) and (result2 == RESULT_OK) and (result3 == RESULT_OK), \
             "Align:  Failed to evaluate transformation for alignment to markers"
 

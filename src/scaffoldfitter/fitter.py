@@ -3,12 +3,12 @@ Main class for fitting scaffolds.
 """
 
 import json
+
 from opencmiss.maths.vectorops import sub
 from opencmiss.utils.zinc.field import assignFieldParameters, createFieldFiniteElementClone, getGroupList, \
-    findOrCreateFieldFiniteElement, findOrCreateFieldStoredMeshLocation, \
-    getUniqueFieldName, orphanFieldByName
-from opencmiss.utils.zinc.finiteelement import evaluateFieldNodesetMean, evaluateFieldNodesetRange, findNodeWithName, \
-    getMaximumNodeIdentifier
+    findOrCreateFieldFiniteElement, findOrCreateFieldStoredMeshLocation, getUniqueFieldName, orphanFieldByName
+from opencmiss.utils.zinc.finiteelement import evaluateFieldNodesetMean, evaluateFieldNodesetRange, \
+    findNodeWithName, getMaximumNodeIdentifier
 from opencmiss.utils.zinc.general import ChangeManager
 from opencmiss.zinc.context import Context
 from opencmiss.zinc.element import Elementbasis, Elementfieldtemplate
@@ -111,7 +111,7 @@ class Fitter:
             "markerGroup": self._markerGroupName,
             "diagnosticLevel": self._diagnosticLevel,
             "fitterSteps": [fitterStep.encodeSettingsJSONDict() for fitterStep in self._fitterSteps]
-            }
+        }
         return json.dumps(dct, sort_keys=False, indent=4)
 
     def getInitialFitterStepConfig(self):
@@ -224,7 +224,7 @@ class Fitter:
         # get centre and scale of data coordinates to manage fitting tolerances and steps
         datapoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
         minimums, maximums = evaluateFieldNodesetRange(self._dataCoordinatesField, datapoints)
-        self._dataCentre = [0.5*(minimums[c] + maximums[c]) for c in range(3)]
+        self._dataCentre = [0.5 * (minimums[c] + maximums[c]) for c in range(3)]
         self._dataScale = max((maximums[c] - minimums[c]) for c in range(3))
         if self._diagnosticLevel > 0:
             print("Load data: data coordinates centre ", self._dataCentre)
@@ -280,7 +280,7 @@ class Fitter:
             elemIter = mesh.createElementiterator()
             fieldcache = self._fieldmodule.createFieldcache()
             element = elemIter.next()
-            zeroValues = [0.0]*27
+            zeroValues = [0.0] * 27
             while element.isValid():
                 element.merge(elementtemplate)
                 fieldcache.setElement(element)
@@ -934,7 +934,7 @@ class Fitter:
             if (result1 != RESULT_OK) or (result2 != RESULT_OK) or (area <= 0.0):
                 print("Error: Centre Groups projection failed to get mean coordinates of mesh for group " + groupName)
                 return
-            meshCentre = [s/area for s in coordinatesIntegral]
+            meshCentre = [s / area for s in coordinatesIntegral]
             # print("Centre Groups meshCentre", meshCentre)
             # offset dataCoordinates to make dataCentre coincide with meshCentre
             dataCoordinates = dataCoordinates + self._fieldmodule.createFieldConstant(sub(meshCentre, dataCentre))
@@ -968,7 +968,7 @@ class Fitter:
                       " data points projected for group " + groupName)
         # add to active group
         self._activeDataNodesetGroup.addNodesConditional(self._dataProjectionNodeGroupFields[dimension - 1])
-        return 
+        return
 
     def getGroupDataProjectionNodesetGroup(self, group: FieldGroup):
         """
@@ -1042,7 +1042,6 @@ class Fitter:
                     node = nodeIter.next()
                     while node.isValid():
                         node.merge(nodetemplate)
-                        # print("node",node.getIdentifier(),"result",result)
                         node = nodeIter.next()
                     del nodetemplate
                 self.calculateGroupDataProjections(fieldcache, group, dataGroup, meshGroup, self._dataHostLocationField,
