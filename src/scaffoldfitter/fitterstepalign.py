@@ -52,6 +52,7 @@ def createFieldsTransformations(coordinates: Field, rotation_angles=None, scale_
 
 
 class FitterStepAlign(FitterStep):
+
     _jsonTypeId = "_FitterStepAlign"
 
     def __init__(self):
