@@ -382,10 +382,8 @@ class FitterStepFit(FitterStep):
         fibreField = self._fitter.getFibreField()
         dimension = mesh.getDimension()
         coordinatesCount = modelCoordinates.getNumberOfComponents()
-        # zincVersion = self._fitter.getZincVersion()
-        # zincVersion34 = (zincVersion[0] > 3) or ((zincVersion[0] == 3) and (zincVersion[1] >= 4))
-        assert coordinatesCount == dimension, \
-            "Fit strain/curvature penalties cannot be applied as element dimension < coordinate components. "
+        assert (coordinatesCount == dimension) or fibreField, \
+            "Must supply a fibre field to use strain/curvature penalties with mesh dimension < coordinate components."
         displacement = modelCoordinates - modelReferenceCoordinates
         displacementGradient1 = displacementGradient1raw =\
             fieldmodule.createFieldGradient(displacement, modelReferenceCoordinates)
@@ -401,10 +399,11 @@ class FitterStepFit(FitterStep):
             else:  # dimension == 1
                 fibreAxesT = fieldmodule.createFieldComponent(
                     fibreAxes, [1, 2, 3] if (coordinatesCount == 3) else [1, 2] if (coordinatesCount == 2) else [1])
-            displacementGradient1 = \
-                fieldmodule.createFieldMatrixMultiply(coordinatesCount, displacementGradient1, fibreAxesT)
         deformationTerm = None
         if strainActiveMeshGroup.getSize() > 0:
+            if fibreField:
+                displacementGradient1 = \
+                    fieldmodule.createFieldMatrixMultiply(coordinatesCount, displacementGradient1raw, fibreAxesT)
             alpha = self._fitter.getStrainPenaltyField()
             wtSqDeformationGradient1 = \
                 fieldmodule.createFieldDotProduct(alpha, displacementGradient1*displacementGradient1)

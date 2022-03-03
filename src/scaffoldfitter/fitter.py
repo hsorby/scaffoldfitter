@@ -253,14 +253,13 @@ class Fitter:
         mesh = self.getHighestDimensionMesh()
         meshName = mesh.getName()
         dimension = mesh.getDimension()
-        if dimension < 2:
-            print("Scaffoldfitter: dimension < 2. Invalid model?")
-            return
         with ChangeManager(self._fieldmodule):
+            coordinatesCount = self._modelCoordinatesField.getNumberOfComponents()
+            # Future issue: call this again if coordinates field changes in number of components
             self._strainPenaltyField = findOrCreateFieldFiniteElement(
-                self._fieldmodule, "strain_penalty", components_count=(9 if (dimension == 3) else 4))
+                self._fieldmodule, "strain_penalty", components_count=coordinatesCount*dimension)
             self._curvaturePenaltyField = findOrCreateFieldFiniteElement(
-                self._fieldmodule, "curvature_penalty", components_count=(27 if (dimension == 3) else 8))
+                self._fieldmodule, "curvature_penalty", components_count=coordinatesCount*coordinatesCount*dimension)
             activeMeshGroups = []
             for defname in ["deform", "strain", "curvature"]:
                 activeMeshName = defname + "_active_group." + meshName
@@ -596,8 +595,9 @@ class Fitter:
         # Get list of mesh groups of highest dimension with strain, curvature penalties
         mesh = self.getHighestDimensionMesh()
         dimension = mesh.getDimension()
-        strainComponents = 9 if (dimension == 3) else 4
-        curvatureComponents = 27 if (dimension == 3) else 8
+        coordinatesCount = self._modelCoordinatesField.getNumberOfComponents()
+        strainComponents = coordinatesCount*dimension
+        curvatureComponents = coordinatesCount*coordinatesCount*dimension
         groups = []
         # add None for default group
         for group in (getGroupList(self._fieldmodule) + [None]):
@@ -804,7 +804,8 @@ class Fitter:
         if modelCoordinatesField == self._modelCoordinatesField:
             return
         finiteElementField = modelCoordinatesField.castFiniteElement()
-        assert finiteElementField.isValid() and (finiteElementField.getNumberOfComponents() == 3)
+        mesh = self.getHighestDimensionMesh()
+        assert finiteElementField.isValid() and (mesh.getDimension() <= finiteElementField.getNumberOfComponents() <= 3)
         self._modelCoordinatesField = finiteElementField
         self._modelCoordinatesFieldName = modelCoordinatesField.getName()
         modelReferenceCoordinatesFieldName = "reference_" + self._modelCoordinatesField.getName()
@@ -1190,7 +1191,7 @@ class Fitter:
         with ChangeManager(self._fieldmodule):
             # temporarily rename model coordinates field to prefix with "fitted "
             # so can be used along with original coordinates in later steps
-            outputCoordinatesFieldName = "fitted " + self._modelCoordinatesFieldName;
+            outputCoordinatesFieldName = "fitted " + self._modelCoordinatesFieldName
             self._modelCoordinatesField.setName(outputCoordinatesFieldName)
 
             sir = self._region.createStreaminformationRegion()
