@@ -1169,6 +1169,13 @@ class Fitter:
         coordinates = self._fieldmodule.findFieldByName(coordinatesFieldName)
         return evaluateFieldNodesetMean(coordinates, nodesetGroup)
 
+    def printLog(self):
+        loggerMessageCount = self._logger.getNumberOfMessages()
+        if loggerMessageCount > 0:
+            for i in range(1, loggerMessageCount + 1):
+                print(self._logger.getMessageTypeAtIndex(i), self._logger.getMessageTextAtIndex(i))
+            self._logger.removeAllMessages()
+
     def getDiagnosticLevel(self):
         return self._diagnosticLevel
 
@@ -1201,11 +1208,7 @@ class Fitter:
             sir.setResourceDomainTypes(srf, Field.DOMAIN_TYPE_NODES |
                                        Field.DOMAIN_TYPE_MESH1D | Field.DOMAIN_TYPE_MESH2D | Field.DOMAIN_TYPE_MESH3D)
             result = self._region.write(sir)
-            # loggerMessageCount = self._logger.getNumberOfMessages()
-            # if loggerMessageCount > 0:
-            #    for i in range(1, loggerMessageCount + 1):
-            #        print(self._logger.getMessageTypeAtIndex(i), self._logger.getMessageTextAtIndex(i))
-            #    self._logger.removeAllMessages()
+            # self.printLog()
 
             # restore original name
             self._modelCoordinatesField.setName(self._modelCoordinatesFieldName)

@@ -391,6 +391,8 @@ class FitterStepFit(FitterStep):
         if fibreField:
             # convert to local fibre directions, with possible dimension reduction for 2D, 1D
             fibreAxes = fieldmodule.createFieldFibreAxes(fibreField, modelReferenceCoordinates)
+            if not fibreAxes.isValid():
+                self.getFitter().printLog()
             if dimension == 3:
                 fibreAxesT = fieldmodule.createFieldTranspose(3, fibreAxes)
             elif dimension == 2:
@@ -407,7 +409,6 @@ class FitterStepFit(FitterStep):
             alpha = self._fitter.getStrainPenaltyField()
             wtSqDeformationGradient1 = \
                 fieldmodule.createFieldDotProduct(alpha, displacementGradient1*displacementGradient1)
-            assert wtSqDeformationGradient1.isValid()
             deformationTerm = wtSqDeformationGradient1
         if curvatureActiveMeshGroup.getSize() > 0:
             # don't do gradient of displacementGradient1 with fibres due to slow finite difference evaluation
@@ -437,9 +438,11 @@ class FitterStepFit(FitterStep):
             beta = self._fitter.getCurvaturePenaltyField()
             wtSqDeformationGradient2 = \
                 fieldmodule.createFieldDotProduct(beta, displacementGradient2*displacementGradient2)
-            assert wtSqDeformationGradient2.isValid()
             deformationTerm = (deformationTerm + wtSqDeformationGradient2) if deformationTerm \
                 else wtSqDeformationGradient2
+            if not deformationTerm.isValid():
+                self.getFitter().printLog()
+                assert False, "Scaffoldfitter: Failed to get deformation term"
 
         deformationPenaltyObjective = fieldmodule.createFieldMeshIntegral(
             deformationTerm, self._fitter.getModelReferenceCoordinatesField(), deformActiveMeshGroup)
