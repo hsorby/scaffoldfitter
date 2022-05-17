@@ -1,0 +1,107 @@
+EX Version: 3
+Region: /
+!#nodeset nodes
+Define node template: node1
+Shape. Dimension=0
+#Fields=1
+1) coordinates, coordinate, rectangular cartesian, real, #Components=3
+ x. #Values=4 (value,d/ds1,d/ds2,d2/ds1ds2)
+ y. #Values=4 (value,d/ds1,d/ds2,d2/ds1ds2)
+ z. #Values=4 (value,d/ds1,d/ds2,d2/ds1ds2)
+Node template: node1
+Node: 1
+ -1.626213461833170e+02  1.532982347640655e+02 -3.209133637938066e+00  0.000000000000000e+00
+ -4.177781272064688e+01  4.396489991620456e+00 -4.050957898016350e-01  0.000000000000000e+00
+ -1.781534745849336e+01  2.414573671671860e+00  2.044814485948621e+02  0.000000000000000e+00
+Node: 2
+ -9.323111420859533e+00  1.532982347569600e+02 -3.209133637938066e+00  0.000000000000000e+00
+ -3.738132272929370e+01  4.396489991620456e+00 -4.050957898016350e-01  0.000000000000000e+00
+ -1.540077378641720e+01  2.414573672115949e+00  2.044814485948621e+02  0.000000000000000e+00
+Node: 3
+  1.439751233415979e+02  1.532982347640655e+02 -3.209133637938066e+00  0.000000000000000e+00
+ -3.298483273794052e+01  4.396489989844099e+00 -4.050957862489213e-01  0.000000000000000e+00
+ -1.298620011434104e+01  2.414573672115949e+00  2.044814485939739e+02  0.000000000000000e+00
+Node: 4
+ -1.658304798265401e+02  1.532982347640655e+02 -3.209133637938066e+00  0.000000000000000e+00
+ -4.218290850937380e+01  4.396489991620456e+00 -4.050957898016350e-01  0.000000000000000e+00
+  1.866661011357268e+02  2.414573671671860e+00  2.044814485913093e+02  0.000000000000000e+00
+Node: 5
+ -1.253224506408267e+01  1.532982347569600e+02 -3.209133637938066e+00  0.000000000000000e+00
+ -3.778641851802062e+01  4.396489991620456e+00 -4.050957862489213e-01  0.000000000000000e+00
+  1.890806748078029e+02  2.414573671671860e+00  2.044814485913093e+02  0.000000000000000e+00
+Node: 6
+  1.407659896983748e+02  1.532982347640655e+02 -3.209133637938066e+00  0.000000000000000e+00
+ -3.338992852666745e+01  4.396489991620456e+00 -4.050957862489213e-01  0.000000000000000e+00
+  1.914952484798791e+02  2.414573671671860e+00  2.044814485913093e+02  0.000000000000000e+00
+!#mesh mesh1d, dimension=1, nodeset=nodes
+Define element template: element1
+Shape. Dimension=1, line
+#Scale factor sets=0
+#Nodes=0
+#Fields=0
+Element template: element1
+Element: 1
+Element: 2
+Element: 3
+Element: 4
+Element: 5
+Element: 6
+Element: 7
+!#mesh mesh2d, dimension=2, face mesh=mesh1d, nodeset=nodes
+Define element template: element2
+Shape. Dimension=2, line*line
+#Scale factor sets=0
+#Nodes=4
+#Fields=1
+1) coordinates, coordinate, rectangular cartesian, real, #Components=3
+ x. c.Hermite*c.Hermite, no modify, standard node based.
+  #Nodes=4
+  1. #Values=4
+   Value labels: value d/ds1 d/ds2 d2/ds1ds2
+  2. #Values=4
+   Value labels: value d/ds1 d/ds2 d2/ds1ds2
+  3. #Values=4
+   Value labels: value d/ds1 d/ds2 d2/ds1ds2
+  4. #Values=4
+   Value labels: value d/ds1 d/ds2 d2/ds1ds2
+ y. c.Hermite*c.Hermite, no modify, standard node based.
+  #Nodes=4
+  1. #Values=4
+   Value labels: value d/ds1 d/ds2 d2/ds1ds2
+  2. #Values=4
+   Value labels: value d/ds1 d/ds2 d2/ds1ds2
+  3. #Values=4
+   Value labels: value d/ds1 d/ds2 d2/ds1ds2
+  4. #Values=4
+   Value labels: value d/ds1 d/ds2 d2/ds1ds2
+ z. c.Hermite*c.Hermite, no modify, standard node based.
+  #Nodes=4
+  1. #Values=4
+   Value labels: value d/ds1 d/ds2 d2/ds1ds2
+  2. #Values=4
+   Value labels: value d/ds1 d/ds2 d2/ds1ds2
+  3. #Values=4
+   Value labels: value d/ds1 d/ds2 d2/ds1ds2
+  4. #Values=4
+   Value labels: value d/ds1 d/ds2 d2/ds1ds2
+Element template: element2
+Element: 1
+ Faces:
+ 1 2 3 4
+ Nodes:
+ 1 2 4 5
+Element: 2
+ Faces:
+ 2 5 6 7
+ Nodes:
+ 2 3 5 6
+Group name: breast
+!#nodeset nodes
+Node group:
+1..6
+!#mesh mesh1d, dimension=1, nodeset=nodes
+Element group:
+1..7
+!#mesh mesh2d, dimension=2, face mesh=mesh1d, nodeset=nodes
+Element group:
+1..2
