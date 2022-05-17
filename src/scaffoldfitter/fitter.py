@@ -601,7 +601,7 @@ class Fitter:
         dimension = mesh.getDimension()
         coordinatesCount = self._modelCoordinatesField.getNumberOfComponents()
         strainComponents = coordinatesCount*dimension
-        curvatureComponents = coordinatesCount*coordinatesCount*dimension
+        curvatureComponents = coordinatesCount*dimension*dimension
         groups = []
         # add None for default group
         for group in (getGroupList(self._fieldmodule) + [None]):
