@@ -98,7 +98,7 @@ class Fitter:
             self._diagnosticLevel = settings["diagnosticLevel"]
         else:
             self._fitterSteps = oldFitterSteps
-            assert False, "Missing initial config step"
+            raise AssertionError("Missing initial config step")
 
     def encodeSettingsJSON(self) -> str:
         """
@@ -149,7 +149,7 @@ class Fitter:
         for index in range(self._fitterSteps.index(refFitterStep), -1, -1):
             if isinstance(self._fitterSteps[index], FitterStepConfig):
                 return self._fitterSteps[index]
-        assert False, "getActiveFitterStepConfig.  Could not find config."
+        raise AssertionError("getActiveFitterStepConfig.  Could not find config.")
 
     def addFitterStep(self, fitterStep: FitterStep, refFitterStep=None):
         """
@@ -253,14 +253,13 @@ class Fitter:
         mesh = self.getHighestDimensionMesh()
         meshName = mesh.getName()
         dimension = mesh.getDimension()
-        if dimension < 2:
-            print("Scaffoldfitter: dimension < 2. Invalid model?")
-            return
         with ChangeManager(self._fieldmodule):
+            coordinatesCount = self._modelCoordinatesField.getNumberOfComponents()
+            # Future issue: call this again if coordinates field changes in number of components
             self._strainPenaltyField = findOrCreateFieldFiniteElement(
-                self._fieldmodule, "strain_penalty", components_count=(9 if (dimension == 3) else 4))
+                self._fieldmodule, "strain_penalty", components_count=coordinatesCount*dimension)
             self._curvaturePenaltyField = findOrCreateFieldFiniteElement(
-                self._fieldmodule, "curvature_penalty", components_count=(27 if (dimension == 3) else 8))
+                self._fieldmodule, "curvature_penalty", components_count=coordinatesCount*dimension*dimension)
             activeMeshGroups = []
             for defname in ["deform", "strain", "curvature"]:
                 activeMeshName = defname + "_active_group." + meshName
@@ -403,7 +402,9 @@ class Fitter:
                 sir = self._region.createStreaminformationRegion()
                 sir.createStreamresourceMemoryBuffer(buffer)
                 result = self._region.read(sir)
-                assert result == RESULT_OK, "Failed to load nodes as datapoints"
+                if result != RESULT_OK:
+                    self.printLog()
+                    raise AssertionError("Failed to load nodes as datapoints")
         # transfer datapoints to self._region
         sir = self._rawDataRegion.createStreaminformationRegion()
         srm = sir.createStreamresourceMemory()
@@ -414,7 +415,9 @@ class Fitter:
         sir = self._region.createStreaminformationRegion()
         sir.createStreamresourceMemoryBuffer(buffer)
         result = self._region.read(sir)
-        assert result == RESULT_OK, "Failed to load datapoints"
+        if result != RESULT_OK:
+            self.printLog()
+            raise AssertionError("Failed to load datapoints, result " + str(result))
         self._discoverDataCoordinatesField()
         self._discoverMarkerGroup()
 
@@ -596,8 +599,9 @@ class Fitter:
         # Get list of mesh groups of highest dimension with strain, curvature penalties
         mesh = self.getHighestDimensionMesh()
         dimension = mesh.getDimension()
-        strainComponents = 9 if (dimension == 3) else 4
-        curvatureComponents = 27 if (dimension == 3) else 8
+        coordinatesCount = self._modelCoordinatesField.getNumberOfComponents()
+        strainComponents = coordinatesCount*dimension
+        curvatureComponents = coordinatesCount*dimension*dimension
         groups = []
         # add None for default group
         for group in (getGroupList(self._fieldmodule) + [None]):
@@ -804,7 +808,8 @@ class Fitter:
         if modelCoordinatesField == self._modelCoordinatesField:
             return
         finiteElementField = modelCoordinatesField.castFiniteElement()
-        assert finiteElementField.isValid() and (finiteElementField.getNumberOfComponents() == 3)
+        mesh = self.getHighestDimensionMesh()
+        assert finiteElementField.isValid() and (mesh.getDimension() <= finiteElementField.getNumberOfComponents() <= 3)
         self._modelCoordinatesField = finiteElementField
         self._modelCoordinatesFieldName = modelCoordinatesField.getName()
         modelReferenceCoordinatesFieldName = "reference_" + self._modelCoordinatesField.getName()
@@ -1168,6 +1173,13 @@ class Fitter:
         coordinates = self._fieldmodule.findFieldByName(coordinatesFieldName)
         return evaluateFieldNodesetMean(coordinates, nodesetGroup)
 
+    def printLog(self):
+        loggerMessageCount = self._logger.getNumberOfMessages()
+        if loggerMessageCount > 0:
+            for i in range(1, loggerMessageCount + 1):
+                print(self._logger.getMessageTypeAtIndex(i), self._logger.getMessageTextAtIndex(i))
+            self._logger.removeAllMessages()
+
     def getDiagnosticLevel(self):
         return self._diagnosticLevel
 
@@ -1190,7 +1202,7 @@ class Fitter:
         with ChangeManager(self._fieldmodule):
             # temporarily rename model coordinates field to prefix with "fitted "
             # so can be used along with original coordinates in later steps
-            outputCoordinatesFieldName = "fitted " + self._modelCoordinatesFieldName;
+            outputCoordinatesFieldName = "fitted " + self._modelCoordinatesFieldName
             self._modelCoordinatesField.setName(outputCoordinatesFieldName)
 
             sir = self._region.createStreaminformationRegion()
@@ -1200,11 +1212,7 @@ class Fitter:
             sir.setResourceDomainTypes(srf, Field.DOMAIN_TYPE_NODES |
                                        Field.DOMAIN_TYPE_MESH1D | Field.DOMAIN_TYPE_MESH2D | Field.DOMAIN_TYPE_MESH3D)
             result = self._region.write(sir)
-            # loggerMessageCount = self._logger.getNumberOfMessages()
-            # if loggerMessageCount > 0:
-            #    for i in range(1, loggerMessageCount + 1):
-            #        print(self._logger.getMessageTypeAtIndex(i), self._logger.getMessageTextAtIndex(i))
-            #    self._logger.removeAllMessages()
+            # self.printLog()
 
             # restore original name
             self._modelCoordinatesField.setName(self._modelCoordinatesFieldName)

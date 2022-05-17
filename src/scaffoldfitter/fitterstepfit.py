@@ -382,10 +382,8 @@ class FitterStepFit(FitterStep):
         fibreField = self._fitter.getFibreField()
         dimension = mesh.getDimension()
         coordinatesCount = modelCoordinates.getNumberOfComponents()
-        # zincVersion = self._fitter.getZincVersion()
-        # zincVersion34 = (zincVersion[0] > 3) or ((zincVersion[0] == 3) and (zincVersion[1] >= 4))
-        assert coordinatesCount == dimension, \
-            "Fit strain/curvature penalties cannot be applied as element dimension < coordinate components. "
+        assert (coordinatesCount == dimension) or fibreField, \
+            "Must supply a fibre field to use strain/curvature penalties with mesh dimension < coordinate components."
         displacement = modelCoordinates - modelReferenceCoordinates
         displacementGradient1 = displacementGradient1raw =\
             fieldmodule.createFieldGradient(displacement, modelReferenceCoordinates)
@@ -393,6 +391,8 @@ class FitterStepFit(FitterStep):
         if fibreField:
             # convert to local fibre directions, with possible dimension reduction for 2D, 1D
             fibreAxes = fieldmodule.createFieldFibreAxes(fibreField, modelReferenceCoordinates)
+            if not fibreAxes.isValid():
+                self.getFitter().printLog()
             if dimension == 3:
                 fibreAxesT = fieldmodule.createFieldTranspose(3, fibreAxes)
             elif dimension == 2:
@@ -401,14 +401,14 @@ class FitterStepFit(FitterStep):
             else:  # dimension == 1
                 fibreAxesT = fieldmodule.createFieldComponent(
                     fibreAxes, [1, 2, 3] if (coordinatesCount == 3) else [1, 2] if (coordinatesCount == 2) else [1])
-            displacementGradient1 = \
-                fieldmodule.createFieldMatrixMultiply(coordinatesCount, displacementGradient1, fibreAxesT)
         deformationTerm = None
         if strainActiveMeshGroup.getSize() > 0:
+            if fibreField:
+                displacementGradient1 = \
+                    fieldmodule.createFieldMatrixMultiply(coordinatesCount, displacementGradient1raw, fibreAxesT)
             alpha = self._fitter.getStrainPenaltyField()
             wtSqDeformationGradient1 = \
                 fieldmodule.createFieldDotProduct(alpha, displacementGradient1*displacementGradient1)
-            assert wtSqDeformationGradient1.isValid()
             deformationTerm = wtSqDeformationGradient1
         if curvatureActiveMeshGroup.getSize() > 0:
             # don't do gradient of displacementGradient1 with fibres due to slow finite difference evaluation
@@ -438,9 +438,11 @@ class FitterStepFit(FitterStep):
             beta = self._fitter.getCurvaturePenaltyField()
             wtSqDeformationGradient2 = \
                 fieldmodule.createFieldDotProduct(beta, displacementGradient2*displacementGradient2)
-            assert wtSqDeformationGradient2.isValid()
             deformationTerm = (deformationTerm + wtSqDeformationGradient2) if deformationTerm \
                 else wtSqDeformationGradient2
+            if not deformationTerm.isValid():
+                self.getFitter().printLog()
+                raise AssertionError("Scaffoldfitter: Failed to get deformation term")
 
         deformationPenaltyObjective = fieldmodule.createFieldMeshIntegral(
             deformationTerm, self._fitter.getModelReferenceCoordinatesField(), deformActiveMeshGroup)
