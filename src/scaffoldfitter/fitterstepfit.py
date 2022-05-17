@@ -442,7 +442,7 @@ class FitterStepFit(FitterStep):
                 else wtSqDeformationGradient2
             if not deformationTerm.isValid():
                 self.getFitter().printLog()
-                assert False, "Scaffoldfitter: Failed to get deformation term"
+                raise AssertionError("Scaffoldfitter: Failed to get deformation term")
 
         deformationPenaltyObjective = fieldmodule.createFieldMeshIntegral(
             deformationTerm, self._fitter.getModelReferenceCoordinatesField(), deformActiveMeshGroup)

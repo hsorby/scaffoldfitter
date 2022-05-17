@@ -98,7 +98,7 @@ class Fitter:
             self._diagnosticLevel = settings["diagnosticLevel"]
         else:
             self._fitterSteps = oldFitterSteps
-            assert False, "Missing initial config step"
+            raise AssertionError("Missing initial config step")
 
     def encodeSettingsJSON(self) -> str:
         """
@@ -149,7 +149,7 @@ class Fitter:
         for index in range(self._fitterSteps.index(refFitterStep), -1, -1):
             if isinstance(self._fitterSteps[index], FitterStepConfig):
                 return self._fitterSteps[index]
-        assert False, "getActiveFitterStepConfig.  Could not find config."
+        raise AssertionError("getActiveFitterStepConfig.  Could not find config.")
 
     def addFitterStep(self, fitterStep: FitterStep, refFitterStep=None):
         """
@@ -402,7 +402,9 @@ class Fitter:
                 sir = self._region.createStreaminformationRegion()
                 sir.createStreamresourceMemoryBuffer(buffer)
                 result = self._region.read(sir)
-                assert result == RESULT_OK, "Failed to load nodes as datapoints"
+                if result != RESULT_OK:
+                    self.printLog()
+                    raise AssertionError("Failed to load nodes as datapoints")
         # transfer datapoints to self._region
         sir = self._rawDataRegion.createStreaminformationRegion()
         srm = sir.createStreamresourceMemory()
@@ -413,7 +415,9 @@ class Fitter:
         sir = self._region.createStreaminformationRegion()
         sir.createStreamresourceMemoryBuffer(buffer)
         result = self._region.read(sir)
-        assert result == RESULT_OK, "Failed to load datapoints"
+        if result != RESULT_OK:
+            self.printLog()
+            raise AssertionError("Failed to load datapoints, result " + str(result))
         self._discoverDataCoordinatesField()
         self._discoverMarkerGroup()
 
