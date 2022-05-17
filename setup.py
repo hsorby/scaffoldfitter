@@ -23,13 +23,13 @@ requires = [
     # minimal requirements listing
     "opencmiss.maths",
     "opencmiss.utils >= 0.3",
-    "opencmiss.zinc >= 3.4"
+    "opencmiss.zinc >= 3.7"
 ]
 source_license = readfile("LICENSE")
 
 setup(
     name="scaffoldfitter",
-    version="0.3.0",
+    version="0.4.0",
     description="Scaffold/model geometric fitting library using OpenCMISS-Zinc.",
     long_description="\n".join(readme) + source_license,
     classifiers=[
