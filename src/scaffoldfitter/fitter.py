@@ -259,7 +259,7 @@ class Fitter:
             self._strainPenaltyField = findOrCreateFieldFiniteElement(
                 self._fieldmodule, "strain_penalty", components_count=coordinatesCount*dimension)
             self._curvaturePenaltyField = findOrCreateFieldFiniteElement(
-                self._fieldmodule, "curvature_penalty", components_count=coordinatesCount*coordinatesCount*dimension)
+                self._fieldmodule, "curvature_penalty", components_count=coordinatesCount*dimension*dimension)
             activeMeshGroups = []
             for defname in ["deform", "strain", "curvature"]:
                 activeMeshName = defname + "_active_group." + meshName
