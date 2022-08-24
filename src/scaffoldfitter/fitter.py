@@ -120,6 +120,39 @@ class Fitter:
         """
         return self._fitterSteps[0]
 
+    def moveFitterStep(self, prevRow, newRow, modelFileNameStem):
+        """
+        Move fitterStep to run after afterFitterStep.
+        Model is reloaded and no fitter steps after initial config are run.
+        :param prevRow: Previous index of step needs to be moved.
+        :param newRow: Index of moved step after moving.
+        :param modelFileNameStem: File name stem for writing intermediate model files.
+        :return: True if model is reloaded, False if not. 
+        :return: index of end step. 
+        """
+        endStep = self._fitterSteps[0]
+        for step in self._fitterSteps:
+            if step.hasRun():
+                endStep = step
+        fitterStep = self._fitterSteps[prevRow]
+        prevBeforeFitterStep = self._fitterSteps[prevRow - 1]
+        # Switch position
+        self._fitterSteps.insert(newRow,  self._fitterSteps.pop(prevRow))
+        beforeFitterStep = self._fitterSteps[newRow - 1]
+        afterFitterStep = self._fitterSteps[newRow + 1] if newRow < len(self._fitterSteps) - 1 else None
+        isMovingStepRun = fitterStep.hasRun()
+        isAfterStepRun = afterFitterStep.hasRun() if afterFitterStep else False
+        isBeforeStepRun = beforeFitterStep.hasRun()
+        if not isMovingStepRun and not isAfterStepRun:
+            return False, self._fitterSteps.index(endStep)
+        elif not isMovingStepRun and isAfterStepRun:
+            endStep = beforeFitterStep
+        elif isMovingStepRun and (isAfterStepRun or not isBeforeStepRun) and fitterStep == endStep:
+            endStep = prevBeforeFitterStep
+        elif isMovingStepRun and not isAfterStepRun and isBeforeStepRun:
+            endStep = fitterStep
+        return self.run(endStep, modelFileNameStem, True), self._fitterSteps.index(endStep)
+
     def getInheritFitterStep(self, refFitterStep: FitterStep):
         """
         Get last FitterStep of same type as refFitterStep or None if
@@ -421,7 +454,7 @@ class Fitter:
         self._discoverDataCoordinatesField()
         self._discoverMarkerGroup()
 
-    def run(self, endStep=None, modelFileNameStem=None):
+    def run(self, endStep=None, modelFileNameStem=None, reorder = False):
         """
         Run either all remaining fitter steps or up to specified end step.
         :param endStep: Last fitter step to run, or None to run all.
@@ -432,7 +465,7 @@ class Fitter:
             endStep = self._fitterSteps[-1]
         endIndex = self._fitterSteps.index(endStep)
         # reload only if necessary
-        if endStep.hasRun() and (endIndex < (len(self._fitterSteps) - 1)) and self._fitterSteps[endIndex + 1].hasRun():
+        if endStep.hasRun() and (endIndex < (len(self._fitterSteps) - 1)) and self._fitterSteps[endIndex + 1].hasRun() or reorder:
             # re-load to get back to current state
             self.load()
             for index in range(1, endIndex + 1):
