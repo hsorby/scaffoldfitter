@@ -1,0 +1,46 @@
+EX Version: 3
+Region: /
+!#nodeset datapoints
+Define node template: node1
+Shape. Dimension=0
+#Fields=1
+1) data_coordinates, coordinate, rectangular cartesian, real, #Components=3
+ x. #Values=1 (value)
+ y. #Values=1 (value)
+ z. #Values=1 (value)
+Node template: node1
+Node: 1
+  2.000000000000000e-01
+  2.000000000000000e-01
+  5.000000000000000e-01
+Node: 2
+  8.000000000000000e-01
+  7.000000000000000e-01
+  3.000000000000000e-01
+Node: 3
+  1.100000000000000e+00
+  9.000000000000000e-01
+  1.000000000000000e-01
+Define node template: node2
+Shape. Dimension=0
+#Fields=2
+1) marker_data_coordinates, coordinate, rectangular cartesian, real, #Components=3
+ x. #Values=1 (value)
+ y. #Values=1 (value)
+ z. #Values=1 (value)
+2) marker_data_name, field, rectangular cartesian, string, #Components=1
+ 1. #Values=1 (value)
+Node template: node2
+Node: 4
+  7.000000000000000e-01
+  3.000000000000000e-01
+ -2.000000000000000e-01
+ middle
+Group name: marker
+!#nodeset datapoints
+Node group:
+4
+Group name: square
+!#nodeset datapoints
+Node group:
+1..3
