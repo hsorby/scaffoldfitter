@@ -57,6 +57,20 @@ class Fit2dTestCase(unittest.TestCase):
         self.assertEqual(result, RESULT_OK)
         self.assertAlmostEqual(surfaceArea, 104501.36293993103, delta=1.0E-1)
 
+    def test_projection_error(self):
+        """
+        Test data projection RMS and maximum error calculations.
+        """
+        zinc_model_file = os.path.join(here, "resources", "square.exf")
+        zinc_data_file = os.path.join(here, "resources", "square_error_data.exf")
+        fitter = Fitter(zinc_model_file, zinc_data_file)
+        fitter.setDiagnosticLevel(1)
+        fitter.load()
+        rmsErrorValue, maxErrorValue = fitter.getDataRMSAndMaximumProjectionError()
+        TOL = 1.0E-10
+        self.assertAlmostEqual(rmsErrorValue, 0.34641016151377546, delta=TOL)  # sqrt(0.12)
+        self.assertAlmostEqual(maxErrorValue, 0.5, delta=TOL)
+
 
 if __name__ == "__main__":
     unittest.main()

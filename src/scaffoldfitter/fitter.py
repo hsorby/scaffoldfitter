@@ -715,6 +715,27 @@ class Fitter:
     def getActiveDataNodesetGroup(self):
         return self._activeDataNodesetGroup
 
+    def getDataRMSAndMaximumProjectionError(self):
+        """
+        Get RMS and maximum error for all active data and marker point projections.
+        No group weights are applied.
+        :return: RMS error value, maximum error value. Values are None if there is no data or bad fields.
+        """
+        with ChangeManager(self._fieldmodule):
+            error = self._fieldmodule.createFieldMagnitude(self._dataDeltaField)
+            msError = self._fieldmodule.createFieldNodesetMeanSquares(error, self._activeDataNodesetGroup)
+            rmsError = self._fieldmodule.createFieldSqrt(msError)
+            maxError = self._fieldmodule.createFieldNodesetMaximum(error, self._activeDataNodesetGroup)
+            fieldcache = self._fieldmodule.createFieldcache()
+            rmsResult, rmsErrorValue = rmsError.evaluateReal(fieldcache, 1)
+            maxResult, maxErrorValue = maxError.evaluateReal(fieldcache, 1)
+            del fieldcache
+            del maxError
+            del rmsError
+            del msError
+            del error
+        return rmsErrorValue if (rmsResult == RESULT_OK) else None, maxErrorValue if (maxResult == RESULT_OK) else None
+
     def getMarkerDataFields(self):
         """
         Only call if markerGroup exists.
@@ -1109,6 +1130,10 @@ class Fitter:
                     print("Warning: " + str(unprojectedCount) +
                           " data points with data coordinates have not been projected")
                 del unprojectedDatapoints
+
+                # Write projection error measures
+                rmsErrorValue, maxErrorValue = self.getDataRMSAndMaximumProjectionError()
+                print("Data projection RMS error", rmsErrorValue, "Max error", maxErrorValue)
 
             # remove temporary objects before ChangeManager exits
             del fieldcache
