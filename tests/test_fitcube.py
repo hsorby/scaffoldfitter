@@ -445,10 +445,10 @@ class FitCubeToSphereTestCase(unittest.TestCase):
 
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 3.2298953613027956, delta=1.0E-4)
+        self.assertAlmostEqual(surfaceArea, 3.2324567941378644, delta=1.0E-4)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(volume, 0.5156233237703589, delta=1.0E-4)
+        self.assertAlmostEqual(volume, 0.5155326610247232, delta=1.0E-4)
 
     def test_groupSettings(self):
         """
