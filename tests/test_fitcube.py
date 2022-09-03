@@ -422,8 +422,8 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         self.assertEqual((0.5, True, False), fit1.getGroupDataWeight("bottom"))
         self.assertEqual((0.1, True, False), fit1.getGroupDataWeight("sides"))
         fit1.setGroupCurvaturePenalty(None, [0.01])
-        fit1.setNumberOfIterations(3)
-        fit1.setUpdateReferenceState(True)
+        fit1.setNumberOfIterations(1)  # only first iteration is not subject to find mesh location algorithm changes
+        fit1.setUpdateReferenceState(False)
         fit1.run()
         dataWeightField = fieldmodule.findFieldByName("data_weight").castFiniteElement()
         self.assertTrue(dataWeightField.isValid())
@@ -442,6 +442,22 @@ class FitCubeToSphereTestCase(unittest.TestCase):
                 self.assertEqual(result, RESULT_OK)
                 self.assertAlmostEqual(weight, expectedWeight, delta=1.0E-10)
                 node = dataIterator.next()
+
+        result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
+        self.assertEqual(result, RESULT_OK)
+        self.assertAlmostEqual(surfaceArea, 3.4214745492787313, delta=1.0E-4)
+        result, volume = volumeField.evaluateReal(fieldcache, 1)
+        self.assertEqual(result, RESULT_OK)
+        self.assertAlmostEqual(volume, 0.530434946775425, delta=1.0E-4)
+
+        # subsequent iterations produce different results when the find mesh location algorithm changes
+
+        fit2 = FitterStepFit()
+        fitter.addFitterStep(fit2)
+        self.assertEqual(4, len(fitter.getFitterSteps()))
+        fit2.setNumberOfIterations(2)
+        fit2.setUpdateReferenceState(True)
+        fit2.run()
 
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
