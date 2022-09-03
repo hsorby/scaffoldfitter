@@ -120,37 +120,33 @@ class Fitter:
         """
         return self._fitterSteps[0]
 
-    def moveFitterStep(self, prevRow, newRow, modelFileNameStem):
+    def moveFitterStep(self, prevIndex, newIndex, modelFileNameStem):
         """
-        Move fitterStep to run after afterFitterStep.
-        Model is reloaded and no fitter steps after initial config are run.
-        :param prevRow: Previous index of step needs to be moved.
-        :param newRow: Index of moved step after moving.
+        Move fitter step from its previous index to a new index in the sequence, to change the order of steps.
+        If a fitter step that has been run is affected by the change, the model is reloaded and no fitter steps
+        after initial config are run. Can't move to/from index 0 which is initial config step.
+        :param prevIndex: Previous index of step to be moved, 1 <= index < number of fitter steps.
+        :param newIndex: New index for that step, 1 <= index < number of fitter steps.
         :param modelFileNameStem: File name stem for writing intermediate model files.
-        :return: True if model is reloaded, False if not. 
-        :return: index of end step. 
+        :return: Boolean True if model is reloaded or False if not, index of end step.
         """
+        assert 0 < prevIndex < len(self._fitterSteps)
+        assert 0 < newIndex < len(self._fitterSteps)
         endStep = self._fitterSteps[0]
         for step in self._fitterSteps:
             if step.hasRun():
                 endStep = step
-        fitterStep = self._fitterSteps[prevRow]
-        prevBeforeFitterStep = self._fitterSteps[prevRow - 1]
+        fitterStep = self._fitterSteps[prevIndex]
         # Switch position
-        self._fitterSteps.insert(newRow,  self._fitterSteps.pop(prevRow))
-        beforeFitterStep = self._fitterSteps[newRow - 1]
-        afterFitterStep = self._fitterSteps[newRow + 1] if newRow < len(self._fitterSteps) - 1 else None
+        self._fitterSteps.insert(newIndex, self._fitterSteps.pop(prevIndex))
+        beforeFitterStep = self._fitterSteps[newIndex - 1]
+        afterFitterStep = self._fitterSteps[newIndex + 1] if newIndex < len(self._fitterSteps) - 1 else None
         isMovingStepRun = fitterStep.hasRun()
         isAfterStepRun = afterFitterStep.hasRun() if afterFitterStep else False
         isBeforeStepRun = beforeFitterStep.hasRun()
         if not isMovingStepRun and not isAfterStepRun:
             return False, self._fitterSteps.index(endStep)
-        elif not isMovingStepRun and isAfterStepRun:
-            endStep = beforeFitterStep
-        elif isMovingStepRun and (isAfterStepRun or not isBeforeStepRun) and fitterStep == endStep:
-            endStep = prevBeforeFitterStep
-        elif isMovingStepRun and not isAfterStepRun and isBeforeStepRun:
-            endStep = fitterStep
+        endStep = self._fitterSteps[0]
         return self.run(endStep, modelFileNameStem, True), self._fitterSteps.index(endStep)
 
     def getInheritFitterStep(self, refFitterStep: FitterStep):
