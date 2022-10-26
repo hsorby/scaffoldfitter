@@ -397,14 +397,14 @@ class FitterStepAlign(FitterStep):
         if self.getDiagnosticLevel() > 1:
             solutionReport = optimisation.getSolutionReport()
             print(solutionReport)
-        assert result == RESULT_OK, "Align:  Alignment to markers optimisation failed"
+        assert result == RESULT_OK, "Align:  Alignment to groups/markers optimisation failed"
 
         result1, self._rotation = rotation.evaluateReal(fieldcache, 3)
         result2, self._scale = scale.evaluateReal(fieldcache, 1)
         result3, self._translation = translation.evaluateReal(fieldcache, 3)
         self._translation = [s * translationScaleFactor for s in self._translation]
         assert (result1 == RESULT_OK) and (result2 == RESULT_OK) and (result3 == RESULT_OK), \
-            "Align:  Failed to evaluate transformation for alignment to markers"
+            "Align:  Failed to evaluate transformation for alignment to groups/markers"
 
 
 def evaluate_field_mesh_integral(field: Field, coordinates: Field, mesh: Mesh, number_of_points=4):

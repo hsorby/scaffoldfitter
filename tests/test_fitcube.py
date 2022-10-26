@@ -302,10 +302,10 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fit1.run()
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 11.097773862300704, delta=1.0E-4)
+        self.assertAlmostEqual(surfaceArea, 11.263113922951398, delta=1.0E-4)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(volume, 2.323461787566051, delta=1.0E-4)
+        self.assertAlmostEqual(volume, 2.2557037278752086, delta=1.0E-4)
 
         # test fibre orientation field
         fitter.load()
@@ -321,10 +321,10 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fit1.run()
         # get end node coordinate to prove twist 
         nodeExpectedCoordinates = {
-            3: [0.8487623099139301, -0.5012613734076182, -0.5306482017126274],
-            6: [0.8487623092159226, 0.2617063557585618, -0.5464896371028911],
-            9: [0.8487623062422882, -0.2617063537282271, 0.5464896401724635],
-            12: [0.8487623124370356, 0.5012613792923117, 0.5306482045212996]}
+            3: [0.8887749296131011, -0.48098055740637335, -0.5386959783454016],
+            6: [0.8797858554332283, 0.46116923672824744, -0.5527908283491083],
+            9: [0.8797858541365591, -0.4611692322900598, 0.5527908321128361],
+            12: [0.8887749312177851, 0.48098056254503413, 0.5386959806235349]}
         fieldcache = fieldmodule.createFieldcache()
         nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
         for nodeIdentifier, expectedCoordinates in nodeExpectedCoordinates.items():

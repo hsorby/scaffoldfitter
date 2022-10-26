@@ -37,11 +37,15 @@ class Fitter:
         self._modelCoordinatesField = None
         self._modelCoordinatesFieldName = None
         self._modelReferenceCoordinatesField = None
-        self._dataCoordinatesField = None
-        self._dataCoordinatesFieldName = None
+        self._modelFitGroup = None
+        self._modelFitGroupName = None
         # fibre field is used to orient strain/curvature penalties. None=global axes
         self._fibreField = None
         self._fibreFieldName = None
+        self._flattenGroup = None
+        self._flattenGroupName = None
+        self._dataCoordinatesField = None
+        self._dataCoordinatesFieldName = None
         self._mesh = []  # [dimension - 1]
         self._dataHostLocationField = None  # stored mesh location field in highest dimension mesh for all data, markers
         self._dataHostCoordinatesField = None  # embedded field giving host coordinates at data location
@@ -92,8 +96,10 @@ class Fitter:
         if (len(self._fitterSteps) > 0) and isinstance(self._fitterSteps[0], FitterStepConfig):
             # field names are read (default to None), fields are found on load
             self._modelCoordinatesFieldName = settings.get("modelCoordinatesField")
-            self._dataCoordinatesFieldName = settings.get("dataCoordinatesField")
+            self._modelFitGroupName = settings.get("modelFitGroup")
             self._fibreFieldName = settings.get("fibreField")
+            self._flattenGroupName = settings.get("flattenGroup")
+            self._dataCoordinatesFieldName = settings.get("dataCoordinatesField")
             self._markerGroupName = settings.get("markerGroup")
             self._diagnosticLevel = settings["diagnosticLevel"]
         else:
@@ -106,8 +112,10 @@ class Fitter:
         """
         dct = {
             "modelCoordinatesField": self._modelCoordinatesFieldName,
-            "dataCoordinatesField": self._dataCoordinatesFieldName,
+            "modelFitGroup": self._modelFitGroupName,
             "fibreField": self._fibreFieldName,
+            "flattenGroup": self._flattenGroupName,
+            "dataCoordinatesField": self._dataCoordinatesFieldName,
             "markerGroup": self._markerGroupName,
             "diagnosticLevel": self._diagnosticLevel,
             "fitterSteps": [fitterStep.encodeSettingsJSONDict() for fitterStep in self._fitterSteps]
@@ -209,8 +217,10 @@ class Fitter:
     def _clearFields(self):
         self._modelCoordinatesField = None
         self._modelReferenceCoordinatesField = None
-        self._dataCoordinatesField = None
+        self._modelFitGroup = None
         self._fibreField = None
+        self._flattenGroup = None
+        self._dataCoordinatesField = None
         self._mesh = []  # [dimension - 1]
         self._dataHostLocationField = None  # stored mesh location field in highest dimension mesh for all data, markers
         self._dataHostCoordinatesField = None  # embedded field giving host coordinates at data location
@@ -286,7 +296,7 @@ class Fitter:
             coordinatesCount = self._modelCoordinatesField.getNumberOfComponents()
             # Future issue: call this again if coordinates field changes in number of components
             self._strainPenaltyField = findOrCreateFieldFiniteElement(
-                self._fieldmodule, "strain_penalty", components_count=coordinatesCount*dimension)
+                self._fieldmodule, "strain_penalty", components_count=dimension*dimension)
             self._curvaturePenaltyField = findOrCreateFieldFiniteElement(
                 self._fieldmodule, "curvature_penalty", components_count=coordinatesCount*dimension*dimension)
             activeMeshGroups = []
@@ -329,7 +339,9 @@ class Fitter:
         assert result == RESULT_OK, "Failed to load model file" + str(self._zincModelFileName)
         self._mesh = [self._fieldmodule.findMeshByDimension(d + 1) for d in range(3)]
         self._discoverModelCoordinatesField()
+        self._discoverModelFitGroup()
         self._discoverFibreField()
+        self._discoverFlattenGroup()
         self._defineCommonMeshFields()
 
     def _defineCommonDataFields(self):
@@ -629,7 +641,7 @@ class Fitter:
         mesh = self.getHighestDimensionMesh()
         dimension = mesh.getDimension()
         coordinatesCount = self._modelCoordinatesField.getNumberOfComponents()
-        strainComponents = coordinatesCount*dimension
+        strainComponents = dimension*dimension
         curvatureComponents = coordinatesCount*dimension*dimension
         groups = []
         # add None for default group
@@ -900,6 +912,40 @@ class Fitter:
         if field:
             self.setModelCoordinatesField(field)
 
+    def getModelFitGroup(self):
+        return self._modelFitGroup
+
+    def setModelFitGroup(self, modelFitGroup: Field):
+        """
+        Set subset of model to fit over. Must be a group field with a mesh group for
+        mesh of highest dimension in model
+        :param modelFitGroup: Zinc group or None for whole mesh.
+        :return:
+        """
+        if modelFitGroup == self._modelFitGroup:
+            return
+        fieldGroup = modelFitGroup.castGroup() if modelFitGroup else None
+        assert (fieldGroup is None) or fieldGroup.isValid()
+        if fieldGroup:
+            elementGroup = fieldGroup.getFieldElementGroup(self.getHighestDimensionMesh())
+            assert elementGroup.isValid() and (elementGroup.getMeshGroup().getSize() > 0)
+        self._modelFitGroup = fieldGroup
+        self._modelFitGroupName = modelFitGroup.getName() if modelFitGroup else None
+
+    def setModelFitGroupByName(self, modelFitGroupName):
+        self.setModelFitGroup(self._fieldmodule.findFieldByName(modelFitGroupName))
+
+    def _discoverModelFitGroup(self):
+        """
+        Discover modelFitGroup from set name.
+        """
+        self._modelFitGroup = None
+        field = None
+        if self._modelFitGroupName:
+            field = self._fieldmodule.findFieldByName(self._modelFitGroupName)
+            if field.isValid():
+                self.setModelFitGroup(field)
+
     def getFibreField(self):
         return self._fibreField
 
@@ -934,6 +980,36 @@ class Fitter:
         if not (fibreField and fibreField.isValid()):
             fibreField = None  # in future, could be zeroFibreField?
         self.setFibreField(fibreField)
+
+    def getFlattenGroup(self):
+        return self._flattenGroup
+
+    def setFlattenGroup(self, flattenGroup: Field):
+        """
+        Set group to constrain to z = 0 (or y = 0 for 2-D coordinates).
+        Data weight for that group is used as weighting on integral.
+        :param flattenGroup: Zinc group or None for whole mesh.
+        """
+        assert (flattenGroup is None) or flattenGroup.castGroup().isValid(), \
+            "Scaffoldfitter: Invalid flatten group"
+        fieldGroup = flattenGroup.castGroup() if flattenGroup else None
+        assert (fieldGroup is None) or fieldGroup.isValid()
+        self._flattenGroup = fieldGroup
+        self._flattenGroupName = flattenGroup.getName() if flattenGroup else None
+
+    def setFlattenGroupByName(self, flattenGroupName):
+        self.setFlattenGroup(self._fieldmodule.findFieldByName(flattenGroupName))
+
+    def _discoverFlattenGroup(self):
+        """
+        Discover flattenGroup from set name.
+        """
+        self._flattenGroup = None
+        field = None
+        if self._flattenGroupName:
+            field = self._fieldmodule.findFieldByName(self._flattenGroupName)
+            if field.isValid():
+                self.setFlattenGroup(field)
 
     def _defineDataProjectionFields(self):
         self._dataProjectionGroupNames = []
@@ -995,10 +1071,13 @@ class Fitter:
             dataCoordinates = dataCoordinates + self._fieldmodule.createFieldConstant(sub(meshCentre, dataCentre))
 
         # find nearest locations on 1-D or 2-D feature but store on highest dimension mesh
-        highestDimensionMesh = self.getHighestDimensionMesh()
-        highestDimension = highestDimensionMesh.getDimension()
-        findLocation = self._fieldmodule.createFieldFindMeshLocation(dataCoordinates, self._modelCoordinatesField,
-                                                                     highestDimensionMesh)
+        storeMesh = self.getHighestDimensionMesh()
+        storeMeshDimension = storeMesh.getDimension()
+        if self._modelFitGroup:
+            storeMesh = self._modelFitGroup.getFieldElementGroup(storeMesh).getMeshGroup()
+            assert storeMesh.isValid(), "Model fit group is wrong dimension"
+        findLocation = self._fieldmodule.createFieldFindMeshLocation(
+            dataCoordinates, self._modelCoordinatesField, storeMesh)
         assert RESULT_OK == findLocation.setSearchMesh(meshGroup)
         findLocation.setSearchMode(FieldFindMeshLocation.SEARCH_MODE_NEAREST)
         nodeIter = dataGroup.createNodeiterator()
@@ -1009,7 +1088,7 @@ class Fitter:
             if dataProportionCounter >= 1.0:
                 dataProportionCounter -= 1.0
                 fieldcache.setNode(node)
-                element, xi = findLocation.evaluateMeshLocation(fieldcache, highestDimension)
+                element, xi = findLocation.evaluateMeshLocation(fieldcache, storeMeshDimension)
                 if element.isValid():
                     result = meshLocation.assignMeshLocation(fieldcache, element, xi)
                     assert result == RESULT_OK, \
@@ -1265,6 +1344,8 @@ class Fitter:
             sir.setResourceFieldNames(srf, [outputCoordinatesFieldName])
             sir.setResourceDomainTypes(srf, Field.DOMAIN_TYPE_NODES |
                                        Field.DOMAIN_TYPE_MESH1D | Field.DOMAIN_TYPE_MESH2D | Field.DOMAIN_TYPE_MESH3D)
+            if self._modelFitGroup:
+                sir.setResourceGroupName(srf, self._modelFitGroup.getName())
             result = self._region.write(sir)
             # self.printLog()
 

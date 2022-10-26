@@ -254,52 +254,24 @@ class FitterStepFit(FitterStep):
         optimisation = fieldmodule.createOptimisation()
         optimisation.setMethod(Optimisation.METHOD_NEWTON)
         optimisation.addDependentField(self._fitter.getModelCoordinatesField())
+        if self._fitter.getModelFitGroup():
+            optimisation.setConditionalField(self._fitter.getModelCoordinatesField(), self._fitter.getModelFitGroup())
         optimisation.setAttributeInteger(Optimisation.ATTRIBUTE_MAXIMUM_ITERATIONS, self._maximumSubIterations)
-
-        # FunctionTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_FUNCTION_TOLERANCE)
-        # GradientTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_GRADIENT_TOLERANCE)
-        # StepTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_STEP_TOLERANCE)
-        MaximumStep = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_MAXIMUM_STEP)
-        MinimumStep = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_MINIMUM_STEP)
-        # LinesearchTolerance = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_LINESEARCH_TOLERANCE)
-        # TrustRegionSize = optimisation.getAttributeReal(Optimisation.ATTRIBUTE_TRUST_REGION_SIZE)
-
-        dataScale = self._fitter.getDataScale()
-        # tol_scale = dataScale  # *dataScale
-        # FunctionTolerance *= tol_scale
-        # optimisation.setAttributeReal(Optimisation.ATTRIBUTE_FUNCTION_TOLERANCE, FunctionTolerance)
-        # GradientTolerance /= tol_scale
-        # optimisation.setAttributeReal(Optimisation.ATTRIBUTE_GRADIENT_TOLERANCE, GradientTolerance)
-        # StepTolerance *= tol_scale
-        # optimisation.setAttributeReal(Optimisation.ATTRIBUTE_STEP_TOLERANCE, StepTolerance)
-        MaximumStep *= dataScale
-        optimisation.setAttributeReal(Optimisation.ATTRIBUTE_MAXIMUM_STEP, MaximumStep)
-        MinimumStep *= dataScale
-        optimisation.setAttributeReal(Optimisation.ATTRIBUTE_MINIMUM_STEP, MinimumStep)
-        # LinesearchTolerance *= dataScale
-        # optimisation.setAttributeReal(Optimisation.ATTRIBUTE_LINESEARCH_TOLERANCE, LinesearchTolerance)
-        # TrustRegionSize *= dataScale
-        # optimisation.setAttributeReal(Optimisation.ATTRIBUTE_TRUST_REGION_SIZE, TrustRegionSize)
-
-        # if self.getDiagnosticLevel() > 0:
-        #    print("Function Tolerance", FunctionTolerance)
-        #    print("Gradient Tolerance", GradientTolerance)
-        #    print("Step Tolerance", StepTolerance)
-        #    print("Maximum Step", MaximumStep)
-        #    print("Minimum Step", MinimumStep)
-        #    print("Linesearch Tolerance", LinesearchTolerance)
-        #    print("Trust Region Size", TrustRegionSize)
 
         deformationPenaltyObjective = None
         with ChangeManager(fieldmodule):
             dataObjective = self.createDataObjectiveField()
             result = optimisation.addObjectiveField(dataObjective)
             assert result == RESULT_OK, "Fit Geometry:  Could not add data objective field"
-            if deformActiveMeshGroup.getSize() > 0:
-                deformationPenaltyObjective = self.createDeformationPenaltyObjectiveField(
-                    deformActiveMeshGroup, strainActiveMeshGroup, curvatureActiveMeshGroup)
+            deformationPenaltyObjective = self.createDeformationPenaltyObjectiveField(
+                deformActiveMeshGroup, strainActiveMeshGroup, curvatureActiveMeshGroup)
+            if deformationPenaltyObjective:
                 result = optimisation.addObjectiveField(deformationPenaltyObjective)
                 assert result == RESULT_OK, "Fit Geometry:  Could not add strain/curvature penalty objective field"
+            flattenGroupObjective = self.createFlattenGroupObjectiveField()
+            if flattenGroupObjective:
+                result = optimisation.addObjectiveField(flattenGroupObjective)
+                assert result == RESULT_OK, "Fit Geometry:  Could not add flatten group objective field"
 
         fieldcache = fieldmodule.createFieldcache()
         objectiveFormat = "{:12e}"
@@ -314,6 +286,10 @@ class FitterStepFit(FitterStep):
                     result, objective = deformationPenaltyObjective.evaluateReal(
                         fieldcache, deformationPenaltyObjective.getNumberOfComponents())
                     print("    Deformation penalty objective", objectiveFormat.format(objective))
+                if flattenGroupObjective:
+                    result, objective = flattenGroupObjective.evaluateReal(
+                        fieldcache, flattenGroupObjective.getNumberOfComponents())
+                    print("    Flatten group objective", objectiveFormat.format(objective))
             result = optimisation.optimise()
             if self.getDiagnosticLevel() > 1:
                 solutionReport = optimisation.getSolutionReport()
@@ -331,6 +307,11 @@ class FitterStepFit(FitterStep):
                 result, objective = deformationPenaltyObjective.evaluateReal(
                     fieldcache, deformationPenaltyObjective.getNumberOfComponents())
                 print("    END Deformation penalty objective", objectiveFormat.format(objective))
+            if flattenGroupObjective:
+                result, objective = flattenGroupObjective.evaluateReal(
+                    fieldcache, flattenGroupObjective.getNumberOfComponents())
+                print("    Flatten group objective", objectiveFormat.format(objective))
+            self._fitter.printLog()
 
         if self._updateReferenceState:
             self._fitter.updateModelReferenceCoordinates()
@@ -361,22 +342,22 @@ class FitterStepFit(FitterStep):
     def createDeformationPenaltyObjectiveField(self, deformActiveMeshGroup, strainActiveMeshGroup,
                                                curvatureActiveMeshGroup):
         """
-        Only call for non-zero strain or curvature penalty values.
+        Get strain and curvature penalty mesh integral objectvive field.
+        Assumes ChangeManager(fieldmodule) is in effect.
         :param deformActiveMeshGroup: Mesh group over which either penalties is applied.
         :param strainActiveMeshGroup: Mesh group over which strain penalty is applied.
         :param curvatureActiveMeshGroup: Mesh group over which curvature penalty is applied.
-        :return: Zinc field, or None if not weighted.
-        Assumes ChangeManager(fieldmodule) is in effect.
+        :return: Zinc FieldMeshIntegral, or None if not applied.
         """
+        if deformActiveMeshGroup.getSize() == 0:
+            return None
+        applyStrainPenalty = strainActiveMeshGroup.getSize() > 0
+        applyCurvaturePenalty = curvatureActiveMeshGroup.getSize() > 0
+        if not (applyStrainPenalty or applyCurvaturePenalty):
+            return None
         numberOfGaussPoints = 3
         fieldmodule = self._fitter.getFieldmodule()
         mesh = self._fitter.getHighestDimensionMesh()
-        # future: eliminate effect of model scale
-        # dataScale = 1.0
-        # dimension = mesh.getDimension()
-        # linearDataScale = self._fitter.getDataScale()
-        # for d in range(dimension):
-        #    dataScale /= linearDataScale
         modelCoordinates = self._fitter.getModelCoordinatesField()
         modelReferenceCoordinates = self._fitter.getModelReferenceCoordinatesField()
         fibreField = self._fitter.getFibreField()
@@ -384,9 +365,9 @@ class FitterStepFit(FitterStep):
         coordinatesCount = modelCoordinates.getNumberOfComponents()
         assert (coordinatesCount == dimension) or fibreField, \
             "Must supply a fibre field to use strain/curvature penalties with mesh dimension < coordinate components."
-        displacement = modelCoordinates - modelReferenceCoordinates
-        displacementGradient1 = displacementGradient1raw =\
-            fieldmodule.createFieldGradient(displacement, modelReferenceCoordinates)
+        deformationGradient1 = deformationGradient1raw = fieldmodule.createFieldGradient(
+            modelCoordinates, modelReferenceCoordinates)
+        fibreAxes = None
         fibreAxesT = None
         if fibreField:
             # convert to local fibre directions, with possible dimension reduction for 2D, 1D
@@ -402,24 +383,32 @@ class FitterStepFit(FitterStep):
                 fibreAxesT = fieldmodule.createFieldComponent(
                     fibreAxes, [1, 2, 3] if (coordinatesCount == 3) else [1, 2] if (coordinatesCount == 2) else [1])
         deformationTerm = None
-        if strainActiveMeshGroup.getSize() > 0:
+        if applyStrainPenalty:
+            # large strain
             if fibreField:
-                displacementGradient1 = \
-                    fieldmodule.createFieldMatrixMultiply(coordinatesCount, displacementGradient1raw, fibreAxesT)
+                deformationGradient1 = fieldmodule.createFieldMatrixMultiply(
+                    coordinatesCount, deformationGradient1raw, fibreAxesT)
+            deformationGradient1T = fieldmodule.createFieldTranspose(coordinatesCount, deformationGradient1)
+            C = fieldmodule.createFieldMatrixMultiply(dimension, deformationGradient1T, deformationGradient1)
             alpha = self._fitter.getStrainPenaltyField()
-            wtSqDeformationGradient1 = \
-                fieldmodule.createFieldDotProduct(alpha, displacementGradient1*displacementGradient1)
-            deformationTerm = wtSqDeformationGradient1
-        if curvatureActiveMeshGroup.getSize() > 0:
-            # don't do gradient of displacementGradient1 with fibres due to slow finite difference evaluation
-            displacementGradient2 = fieldmodule.createFieldGradient(displacementGradient1raw, modelReferenceCoordinates)
+            I = fieldmodule.createFieldConstant(
+                [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0] if (dimension == 3) else
+                [1.0, 0.0, 0.0, 1.0] if (dimension == 2) else
+                [1.0])
+            E2 = C - I
+            wtSqE2 = fieldmodule.createFieldDotProduct(alpha, E2 * E2)
+            deformationTerm = wtSqE2
+        if applyCurvaturePenalty:
+            # second order Sobolev smoothing terms
+            # don't do gradient of deformationGradient1 with fibres due to slow finite difference evaluation
+            deformationGradient2 = fieldmodule.createFieldGradient(deformationGradient1raw, modelReferenceCoordinates)
             if fibreField:
                 # convert to local fibre directions
-                displacementGradient2a = fieldmodule.createFieldMatrixMultiply(coordinatesCount*coordinatesCount,
-                                                                               displacementGradient2, fibreAxesT)
-                # transpose each displacement component of displacementGradient2a to remultiply by fibreAxesT
+                deformationGradient2a = fieldmodule.createFieldMatrixMultiply(
+                    coordinatesCount*coordinatesCount, deformationGradient2, fibreAxesT)
+                # transpose each deformation component of deformationGradient2a to remultiply by fibreAxesT
                 if dimension == 1:
-                    displacementGradient2aT = displacementGradient2a
+                    deformationGradient2aT = deformationGradient2a
                 else:
                     transposeComponents = None
                     if coordinatesCount == 3:
@@ -431,15 +420,15 @@ class FitterStepFit(FitterStep):
                             transposeComponents = [1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12, 13, 15, 17, 14, 16, 18]
                     elif coordinatesCount == 2:
                         transposeComponents = [1, 3, 2, 4, 5, 7, 6, 8]
-                    displacementGradient2aT = \
-                        fieldmodule.createFieldComponent(displacementGradient2a, transposeComponents)
-                displacementGradient2 = fieldmodule.createFieldMatrixMultiply(dimension*coordinatesCount,
-                                                                              displacementGradient2aT, fibreAxesT)
+                    deformationGradient2aT = \
+                        fieldmodule.createFieldComponent(deformationGradient2a, transposeComponents)
+                deformationGradient2 = fieldmodule.createFieldMatrixMultiply(
+                    dimension*coordinatesCount, deformationGradient2aT, fibreAxesT)
             beta = self._fitter.getCurvaturePenaltyField()
             wtSqDeformationGradient2 = \
-                fieldmodule.createFieldDotProduct(beta, displacementGradient2*displacementGradient2)
-            deformationTerm = (deformationTerm + wtSqDeformationGradient2) if deformationTerm \
-                else wtSqDeformationGradient2
+                fieldmodule.createFieldDotProduct(beta, deformationGradient2*deformationGradient2)
+            deformationTerm = \
+                (deformationTerm + wtSqDeformationGradient2) if deformationTerm else wtSqDeformationGradient2
             if not deformationTerm.isValid():
                 self.getFitter().printLog()
                 raise AssertionError("Scaffoldfitter: Failed to get deformation term")
@@ -448,3 +437,43 @@ class FitterStepFit(FitterStep):
             deformationTerm, self._fitter.getModelReferenceCoordinatesField(), deformActiveMeshGroup)
         deformationPenaltyObjective.setNumbersOfPoints(numberOfGaussPoints)
         return deformationPenaltyObjective
+
+    def createFlattenGroupObjectiveField(self):
+        """
+        Get flatten group penalty mesh integral field, if any.
+        Assumes ChangeManager(fieldmodule) is in effect.
+        :return: Zinc FieldMeshIntegral, or None if not applioed.
+        """
+        flattenGroup = self._fitter.getFlattenGroup()
+        if not flattenGroup:
+            return None
+        flattenGroupName = flattenGroup.getName()
+        flattenMeshGroup = None
+        for dimension in range(self._fitter.getHighestDimensionMesh().getDimension(), 0, -1):
+            mesh = self._fitter.getMesh(dimension)
+            elementGroupField = flattenGroup.getFieldElementGroup(mesh)
+            if elementGroupField.isValid():
+                flattenMeshGroup = elementGroupField.getMeshGroup()
+                if flattenMeshGroup.getSize() > 0:
+                    break
+        else:
+            if self.getDiagnosticLevel() > 0:
+                print("Flatten group " + flattenGroupName + " is empty")
+            return None
+        weight = self.getGroupDataWeight(flattenGroupName)[0]
+        if weight <= 0.0:
+            if self.getDiagnosticLevel() > 0:
+                print("Flatten group " + flattenGroupName + " has zero weight")
+            return None
+
+        fieldmodule = self._fitter.getFieldmodule()
+        modelCoordinates = self._fitter.getModelCoordinatesField()
+        flattenComponent = fieldmodule.createFieldComponent(modelCoordinates, modelCoordinates.getNumberOfComponents())
+        flattenWeight = fieldmodule.createFieldConstant([weight])
+        flattenComponentWeighted = flattenWeight * flattenComponent
+        flattenIntegrand = flattenComponentWeighted * flattenComponentWeighted
+        numberOfGaussPoints = 3  # assuming some data applied around edges
+        flattenGroupObjective = fieldmodule.createFieldMeshIntegral(
+            flattenIntegrand, self._fitter.getModelReferenceCoordinatesField(), flattenMeshGroup)
+        flattenGroupObjective.setNumbersOfPoints(numberOfGaussPoints)
+        return flattenGroupObjective
