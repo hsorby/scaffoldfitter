@@ -1148,6 +1148,8 @@ class Fitter:
                 self._dataProjectionNodesetGroups[d].removeAllNodes()
             groups = getGroupList(self._fieldmodule)
             for group in groups:
+                if not group.isManaged():
+                    continue  # skip cmiss_selection, for example
                 groupName = group.getName()
                 dataGroup = self.getGroupDataProjectionNodesetGroup(group)
                 if not dataGroup:

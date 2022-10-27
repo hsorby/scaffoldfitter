@@ -109,7 +109,7 @@ class FitterStepFit(FitterStep):
     def getGroupStrainPenalty(self, groupName, count=None):
         """
         Get list of strain penalty factors used to scale first deformation
-        gradient components in group. Up to 9 components possible in 3-D.
+        gradient components in group. Up to 9 components possible in 3-D, 4 in 2-D.
         :param groupName:  Exact model group name, or None for default group.
         :param count: Optional number of factors to limit or enlarge list to.
         If enlarging, values are padded with the last stored value. If None,
@@ -311,7 +311,8 @@ class FitterStepFit(FitterStep):
                 result, objective = flattenGroupObjective.evaluateReal(
                     fieldcache, flattenGroupObjective.getNumberOfComponents())
                 print("    Flatten group objective", objectiveFormat.format(objective))
-            self._fitter.printLog()
+            if self.getDiagnosticLevel() > 1:
+                self._fitter.printLog()
 
         if self._updateReferenceState:
             self._fitter.updateModelReferenceCoordinates()
