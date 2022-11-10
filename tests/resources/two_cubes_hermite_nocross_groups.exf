@@ -55,6 +55,21 @@ Node: 12
   2.000000000000000e+00  1.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00
   1.000000000000000e+00  0.000000000000000e+00  1.000000000000000e+00  0.000000000000000e+00
   1.000000000000000e+00  0.000000000000000e+00  0.000000000000000e+00  1.000000000000000e+00
+Shape. Dimension=0
+#Fields=2
+1) marker_location, field, rectangular cartesian, element_xi, #Components=1, host mesh=mesh3d, host mesh dimension=3
+ 1. #Values=1 (value)
+2) marker_name, field, rectangular cartesian, string, #Components=1
+ 1. #Values=1 (value)
+Node: 1000001
+ 1  5.000000000000000e-01  5.000000000000000e-01  5.000000000000000e-01
+ outside
+Node: 1000002
+ 1  1.000000000000000e+00  5.000000000000000e-01  5.000000000000000e-01
+ boundary
+Node: 1000003
+ 2  0.500000000000000e+00  5.000000000000000e-01  5.000000000000000e-01
+ inside
 !#mesh mesh1d, dimension=1, nodeset=nodes
 Shape. Dimension=1, line
 #Scale factor sets=0
@@ -361,6 +376,13 @@ Shape. Dimension=2, line*line
 #Fields=0
 Element: 5
 Element: 10
+ Group name: marker
+!#nodeset nodes
+Shape. Dimension=0
+#Fields=0
+Node: 1000001
+Node: 1000002
+Node: 1000003
  Group name: one
 !#nodeset nodes
 Shape. Dimension=0

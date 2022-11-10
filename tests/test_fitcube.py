@@ -2,6 +2,7 @@ import math
 import os
 import unittest
 from opencmiss.utils.zinc.field import createFieldMeshIntegral
+from opencmiss.utils.zinc.finiteelement import find_node_with_name
 from opencmiss.zinc.field import Field
 from opencmiss.zinc.node import Node, Nodeset
 from opencmiss.zinc.result import RESULT_OK
@@ -636,6 +637,74 @@ class FitCubeToSphereTestCase(unittest.TestCase):
                 fieldcache.setNode(node)
                 result, x = modelCoordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, 3)
                 assertAlmostEqualList(self, x, expectedAlignedNodes[nodeIdentifier - 1], delta=1.0E-3)
+
+    def test_aamodelFitGroupMarkers(self):
+        """
+        Test fitting with model fit group properly moves markers on boundary, and ignores markers outside.
+        File two_cubes_hermite_nocross_groups.exf now has 3 marker points: outside, boundary and inside for this.
+        """
+        zinc_model_file = os.path.join(here, "resources", "two_cubes_hermite_nocross_groups.exf")
+        zinc_data_file = os.path.join(here, "resources", "two_cubes_ellipsoid_data_regular_markers.exf")
+        fitter = Fitter(zinc_model_file, zinc_data_file)
+        fitter.setDiagnosticLevel(1)
+        fitter.load()
+
+        fieldmodule = fitter.getFieldmodule()
+        mesh = fitter.getHighestDimensionMesh()
+        self.assertEqual(2, mesh.getSize())
+        element1 = mesh.findElementByIdentifier(1)
+        self.assertTrue(element1.isValid())
+        element2 = mesh.findElementByIdentifier(2)
+        self.assertTrue(element2.isValid())
+        groupTwo = fieldmodule.findFieldByName("two").castGroup()
+        self.assertTrue(groupTwo.isValid())
+
+        markerGroup = fitter.getMarkerGroup()
+        self.assertTrue(markerGroup.isValid())
+        markerDataGroup, markerDataCoordinates, markerDataName = fitter.getMarkerDataFields()
+        dataHostLocation = fitter.getDataHostLocationField()
+        activeDataNodesetGroup = fitter.getActiveDataNodesetGroup()
+
+        fieldcache = fieldmodule.createFieldcache()
+        TOL = 1.0E-12
+
+        expectedMarkerDataLocations = {
+            "outside": (element1, [0.5, 0.5, 0.5]),
+            "boundary": (element1, [1.0, 0.5, 0.5]),
+            "inside": (element2, [0.5, 0.5, 0.5]),
+        }
+        expectedMarkerDataLocationsModelFitGroup = {
+            "outside": (None, None),
+            "boundary": (element2, [0.0, 0.5, 0.5]),
+            "inside": (element2, [0.5, 0.5, 0.5]),
+        }
+
+        for i in range(3):
+
+            expectedLocations = expectedMarkerDataLocations
+            if i == 1:
+                fitter.setModelFitGroup(groupTwo)
+                expectedLocations = expectedMarkerDataLocationsModelFitGroup
+            elif i == 2:
+                fitter.setModelFitGroup(None)  # test changing back to whole mesh
+            markerDataLocationNodesetGroup = fitter.getMarkerDataLocationNodesetGroup()  # as recreated each time
+
+            for name, expectedLocation in expectedLocations.items():
+                markerNode = find_node_with_name(markerDataGroup, markerDataName, name)
+                fieldcache.setNode(markerNode)
+                element, xi = dataHostLocation.evaluateMeshLocation(fieldcache, 3)
+                if not expectedLocation[0]:
+                    self.assertFalse(element.isValid())
+                    self.assertFalse(markerDataLocationNodesetGroup.containsNode(markerNode))
+                    self.assertFalse(activeDataNodesetGroup.containsNode(markerNode))
+                    continue
+                self.assertTrue(element.isValid())
+                self.assertTrue(markerDataLocationNodesetGroup.containsNode(markerNode))
+                self.assertTrue(activeDataNodesetGroup.containsNode(markerNode))
+                self.assertEqual(expectedLocation[0], element)
+                self.assertAlmostEqual(expectedLocation[1][0], xi[0], delta=TOL)
+                self.assertAlmostEqual(expectedLocation[1][1], xi[1], delta=TOL)
+                self.assertAlmostEqual(expectedLocation[1][2], xi[2], delta=TOL)
 
 
 if __name__ == "__main__":

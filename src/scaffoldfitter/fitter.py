@@ -63,6 +63,7 @@ class Fitter:
         self._markerLocationField = None
         self._markerNameField = None
         self._markerCoordinatesField = None
+        self._markerDataGroupField = None
         self._markerDataGroup = None
         self._markerDataCoordinatesField = None
         self._markerDataNameField = None
@@ -237,6 +238,7 @@ class Fitter:
         self._markerLocationField = None
         self._markerNameField = None
         self._markerCoordinatesField = None
+        self._markerDataGroupField = None
         self._markerDataGroup = None
         self._markerDataCoordinatesField = None
         self._markerDataNameField = None
@@ -540,6 +542,7 @@ class Fitter:
         self._markerLocationField = None
         self._markerCoordinatesField = None
         self._markerNameField = None
+        self._markerDataGroupField = None
         self._markerDataGroup = None
         self._markerDataCoordinatesField = None
         self._markerDataNameField = None
@@ -571,7 +574,8 @@ class Fitter:
         else:
             self._markerNodeGroup = None
         datapoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
-        self._markerDataGroup = self._markerGroup.getFieldNodeGroup(datapoints).getNodesetGroup()
+        self._markerDataGroupField = self._markerGroup.getFieldNodeGroup(datapoints)
+        self._markerDataGroup = self._markerDataGroupField.getNodesetGroup()
         if self._markerDataGroup.isValid():
             datapoint = self._markerDataGroup.createNodeiterator().next()
             if datapoint.isValid():
@@ -588,6 +592,7 @@ class Fitter:
                             self._markerDataNameField = field
                     field = fielditer.next()
         else:
+            self._markerDataGroupField = None
             self._markerDataGroup = None
         self._calculateMarkerDataLocations()
 
@@ -787,7 +792,6 @@ class Fitter:
         datapoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
         meshDimension = mesh.getDimension()
         with ChangeManager(self._fieldmodule):
-            fieldcache = self._fieldmodule.createFieldcache()
             self._markerDataLocationGroupField = self._fieldmodule.createFieldNodeGroup(datapoints)
             self._markerDataLocationGroupField.setName(
                 getUniqueFieldName(self._fieldmodule, markerPrefix + "_data_location_group"))
@@ -802,6 +806,21 @@ class Fitter:
                 nodetemplate.defineField(self._dataCoordinatesField)
             # need to define storage for marker data weight, but don't assign here
             nodetemplate.defineField(self._dataWeightField)
+            findMarkerLocation = None
+            modelFitMeshGroup = None
+            undefineNodetemplate = None
+            if self._modelFitGroup:
+                # following needed for re-finding marker point locations on boundary of model fit group
+                modelFitMeshGroup = self._modelFitGroup.getFieldElementGroup(mesh).getMeshGroup()
+                findMarkerLocation = self._fieldmodule.createFieldFindMeshLocation(
+                    self._fieldmodule.createFieldEmbedded(
+                        self._modelReferenceCoordinatesField, self._markerLocationField),
+                    self._modelReferenceCoordinatesField, modelFitMeshGroup)
+                undefineNodetemplate = self._markerDataGroup.createNodetemplate()
+                undefineNodetemplate.undefineField(self._dataHostLocationField)
+                if defineDataCoordinates:
+                    undefineNodetemplate.undefineField(self._dataCoordinatesField)
+            fieldcache = self._fieldmodule.createFieldcache()
             datapointIter = self._markerDataGroup.createNodeiterator()
             datapoint = datapointIter.next()
             while datapoint.isValid():
@@ -816,7 +835,13 @@ class Fitter:
                     if (result == RESULT_OK) and node:
                         fieldcache.setNode(node)
                         element, xi = self._markerLocationField.evaluateMeshLocation(fieldcache, meshDimension)
-                        if element.isValid() and (result == RESULT_OK):
+                        if element.isValid():
+                            if self._modelFitGroup and not modelFitMeshGroup.containsElement(element):
+                                # ensure marker points on boundary of model fit group are moved to elements in it
+                                element, xi = findMarkerLocation.evaluateMeshLocation(fieldcache, meshDimension)
+                                if not element.isValid():
+                                    datapoint.merge(undefineNodetemplate)
+                        if element.isValid():  # ignore markers not in model fit group
                             datapoint.merge(nodetemplate)
                             fieldcache.setNode(datapoint)
                             self._dataHostLocationField.assignMeshLocation(fieldcache, element, xi)
@@ -825,6 +850,11 @@ class Fitter:
                             self._markerDataLocationGroup.addNode(datapoint)
                 datapoint = datapointIter.next()
             del fieldcache
+            del findMarkerLocation
+            # ensure activeDataNodeset only contains active marker points
+            self._activeDataNodesetGroup.removeNodesConditional(self._markerDataGroupField)
+            self._activeDataNodesetGroup.addNodesConditional(self._markerDataLocationGroupField)
+
         # Warn about marker points without a location in model
         markerDataGroupSize = self._markerDataGroup.getSize()
         markerDataLocationGroupSize = self._markerDataLocationGroup.getSize()
@@ -932,6 +962,7 @@ class Fitter:
                 return
         self._modelFitGroup = fieldGroup
         self._modelFitGroupName = modelFitGroup.getName() if modelFitGroup else None
+        self._calculateMarkerDataLocations()  # needed to move or ignore markers not in model fit group
 
     def setModelFitGroupByName(self, modelFitGroupName):
         self.setModelFitGroup(self._fieldmodule.findFieldByName(modelFitGroupName))
