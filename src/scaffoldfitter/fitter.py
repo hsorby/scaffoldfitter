@@ -920,7 +920,6 @@ class Fitter:
         Set subset of model to fit over. Must be a group field with a mesh group for
         mesh of highest dimension in model
         :param modelFitGroup: Zinc group or None for whole mesh.
-        :return:
         """
         if modelFitGroup == self._modelFitGroup:
             return
@@ -928,7 +927,9 @@ class Fitter:
         assert (fieldGroup is None) or fieldGroup.isValid()
         if fieldGroup:
             elementGroup = fieldGroup.getFieldElementGroup(self.getHighestDimensionMesh())
-            assert elementGroup.isValid() and (elementGroup.getMeshGroup().getSize() > 0)
+            if not (elementGroup.isValid() and (elementGroup.getMeshGroup().getSize() > 0)):
+                print("Cannot set model fit group", modelFitGroup.getName(), "as empty mesh group at highest dimension")
+                return
         self._modelFitGroup = fieldGroup
         self._modelFitGroupName = modelFitGroup.getName() if modelFitGroup else None
 
