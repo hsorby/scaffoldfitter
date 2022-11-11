@@ -638,7 +638,7 @@ class FitCubeToSphereTestCase(unittest.TestCase):
                 result, x = modelCoordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, 3)
                 assertAlmostEqualList(self, x, expectedAlignedNodes[nodeIdentifier - 1], delta=1.0E-3)
 
-    def test_aamodelFitGroupMarkers(self):
+    def test_modelFitGroupMarkers(self):
         """
         Test fitting with model fit group properly moves markers on boundary, and ignores markers outside.
         File two_cubes_hermite_nocross_groups.exf now has 3 marker points: outside, boundary and inside for this.
