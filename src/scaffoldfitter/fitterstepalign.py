@@ -61,6 +61,7 @@ class FitterStepAlign(FitterStep):
         self._alignMarkers = False
         self._rotation = [0.0, 0.0, 0.0]
         self._scale = 1.0
+        self._scaleProportion = 1.0
         self._translation = [0.0, 0.0, 0.0]
 
     @classmethod
@@ -79,6 +80,9 @@ class FitterStepAlign(FitterStep):
         self._alignMarkers = dct["alignMarkers"]
         self._rotation = dct["rotation"]
         self._scale = dct["scale"]
+        scaleProportion = dct.get("scaleProportion")
+        if scaleProportion:
+            self._scaleProportion = scaleProportion
         self._translation = dct["translation"]
 
     def encodeSettingsJSONDict(self) -> dict:
@@ -92,6 +96,7 @@ class FitterStepAlign(FitterStep):
             "alignMarkers": self._alignMarkers,
             "rotation": self._rotation,
             "scale": self._scale,
+            "scaleProportion": self._scaleProportion,
             "translation": self._translation
         })
 
@@ -154,6 +159,20 @@ class FitterStepAlign(FitterStep):
         """
         if scale != self._scale:
             self._scale = scale
+            return True
+        return False
+
+    def getScaleProportion(self):
+        return self._scaleProportion
+
+    def setScaleProportion(self, scaleProportion):
+        """
+        :param scaleProportion: Target proportion of optimal scale to set, e.g. 0.9 scales to 90% of optimal size.
+        Clamps to be within range from 0.5 to 2.0..
+        :return: True if state changed, otherwise False.
+        """
+        if scaleProportion != self._scaleProportion:
+            self._scaleProportion = max(0.5, min(scaleProportion, 2.0))
             return True
         return False
 
@@ -310,7 +329,7 @@ class FitterStepAlign(FitterStep):
             fieldcache = fieldmodule.createFieldcache()
 
             one_modelScale = 1.0 / modelScale
-            one_dataScale = 1.0 / dataScale
+            one_dataScale = self._scaleProportion / dataScale
             for name, positions in pointMap.items():
                 unitModelx = mult(sub(positions[0], modelCM), one_modelScale)
                 unitDatax = mult(sub(positions[1], dataCM), one_dataScale)

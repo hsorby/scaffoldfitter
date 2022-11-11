@@ -220,6 +220,28 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         s2 = fitter.encodeSettingsJSON()
         self.assertEqual(s, s2)
 
+    def test_alignMarkersScaleProportion(self):
+        """
+        Test automatic alignment of model and data using fiducial markers, using scale proportion 0.9.
+        """
+        zinc_model_file = os.path.join(here, "resources", "cube_to_sphere.exf")
+        zinc_data_file = os.path.join(here, "resources", "cube_to_sphere_data_regular.exf")
+        fitter = Fitter(zinc_model_file, zinc_data_file)
+        fitter.load()
+
+        align = FitterStepAlign()
+        fitter.addFitterStep(align)
+        self.assertEqual(2, len(fitter.getFitterSteps()))
+        self.assertTrue(align.setAlignMarkers(True))
+        self.assertTrue(align.isAlignMarkers())
+        scaleProportion = 0.9
+        self.assertTrue(align.setScaleProportion(scaleProportion))
+        self.assertEqual(scaleProportion, align.getScaleProportion())
+        align.run()
+
+        scale = align.getScale()
+        self.assertAlmostEqual(scale, scaleProportion * 0.8047378476539072, places=5)
+
     def test_alignGroupsFitEllipsoidRegularData(self):
         """
         Test automatic alignment of model and data using groups & fit two cubes model to ellipsoid data.
