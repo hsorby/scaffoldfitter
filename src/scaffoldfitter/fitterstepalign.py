@@ -168,7 +168,7 @@ class FitterStepAlign(FitterStep):
     def setScaleProportion(self, scaleProportion):
         """
         :param scaleProportion: Target proportion of optimal scale to set, e.g. 0.9 scales to 90% of optimal size.
-        Clamps to be within range from 0.5 to 2.0..
+        Value is clamped to be within range from 0.5 to 2.0.
         :return: True if state changed, otherwise False.
         """
         if scaleProportion != self._scaleProportion:

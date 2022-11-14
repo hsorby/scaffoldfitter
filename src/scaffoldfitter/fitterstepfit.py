@@ -343,7 +343,7 @@ class FitterStepFit(FitterStep):
     def createDeformationPenaltyObjectiveField(self, deformActiveMeshGroup, strainActiveMeshGroup,
                                                curvatureActiveMeshGroup):
         """
-        Get strain and curvature penalty mesh integral objectvive field.
+        Get strain and curvature penalty mesh integral objective field.
         Assumes ChangeManager(fieldmodule) is in effect.
         :param deformActiveMeshGroup: Mesh group over which either penalties is applied.
         :param strainActiveMeshGroup: Mesh group over which strain penalty is applied.
@@ -443,7 +443,7 @@ class FitterStepFit(FitterStep):
         """
         Get flatten group penalty mesh integral field, if any.
         Assumes ChangeManager(fieldmodule) is in effect.
-        :return: Zinc FieldMeshIntegral, or None if not applioed.
+        :return: Zinc FieldMeshIntegral, or None if not applied.
         """
         flattenGroup = self._fitter.getFlattenGroup()
         if not flattenGroup:
