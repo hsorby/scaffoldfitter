@@ -156,9 +156,9 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fieldcache = fieldmodule.createFieldcache()
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 6.0, delta=1.0E-6)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
+        self.assertAlmostEqual(surfaceArea, 6.0, delta=1.0E-6)
         self.assertAlmostEqual(volume, 1.0, delta=1.0E-7)
         activeNodeset = fitter.getActiveDataNodesetGroup()
         self.assertEqual(292, activeNodeset.getSize())
@@ -183,15 +183,17 @@ class FitCubeToSphereTestCase(unittest.TestCase):
                               [-0.5690355950594247, 1.1068454682130484e-05, -0.4023689233125251], delta=1.0E-6)
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 3.885618020657802, delta=1.0E-6)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
+        self.assertAlmostEqual(surfaceArea, 3.885618020657802, delta=1.0E-6)
         self.assertAlmostEqual(volume, 0.5211506471189844, delta=1.0E-6)
 
         fit1 = FitterStepFit()
         fitter.addFitterStep(fit1)
         self.assertEqual(3, len(fitter.getFitterSteps()))
         fit1.setGroupDataWeight("marker", 1.0)
+        # set sliding factor to equivalent used at time of test creation
+        fit1.setGroupDataSlidingFactor(None, 1.0)
         fit1.setGroupCurvaturePenalty(None, [0.01])
         fit1.setNumberOfIterations(3)
         fit1.setUpdateReferenceState(True)
@@ -200,10 +202,10 @@ class FitCubeToSphereTestCase(unittest.TestCase):
 
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 3.18921662820759, delta=1.0E-4)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(volume, 0.5276212500499845, delta=1.0E-4)
+        self.assertAlmostEqual(surfaceArea, 3.18921662820759, delta=1.0E-4)
+        self.assertAlmostEqual(volume, 0.5276212500501103, delta=1.0E-4)
 
         # test json serialisation
         s = fitter.encodeSettingsJSON()
@@ -262,9 +264,9 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fieldcache = fieldmodule.createFieldcache()
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 11.0, delta=1.0E-6)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
+        self.assertAlmostEqual(surfaceArea, 11.0, delta=1.0E-6)
         self.assertAlmostEqual(volume, 2.0, delta=1.0E-6)
 
         align = FitterStepAlign()
@@ -282,9 +284,9 @@ class FitCubeToSphereTestCase(unittest.TestCase):
                               delta=1.0E-6)
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 11.0*scale*scale, delta=1.0E-6)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
+        self.assertAlmostEqual(surfaceArea, 11.0*scale*scale, delta=1.0E-6)
         self.assertAlmostEqual(volume, 2.0*scale*scale*scale, delta=1.0E-6)
 
         fit1 = FitterStepFit()
@@ -322,12 +324,14 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         self.assertTrue(locallySet)
         self.assertFalse(inheritable)
         fit1.setNumberOfIterations(1)
+        # set sliding factor to equivalent used at time of test creation
+        fit1.setGroupDataSlidingFactor(None, 1.0)
         fit1.run()
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 11.263113922951398, delta=1.0E-4)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
+        self.assertAlmostEqual(surfaceArea, 11.263113922951398, delta=1.0E-4)
         self.assertAlmostEqual(volume, 2.2557037278752086, delta=1.0E-4)
 
         # test fibre orientation field
@@ -413,7 +417,7 @@ class FitCubeToSphereTestCase(unittest.TestCase):
 
     def test_fitRegularDataGroupWeight(self):
         """
-        Test automatic alignment of model and data using fiducial markers.
+        Test fitting with variable data group weights and sliding factors.
         """
         zinc_model_file = os.path.join(here, "resources", "cube_to_sphere.exf")
         zinc_data_file = os.path.join(here, "resources", "cube_to_sphere_data_regular.exf")
@@ -440,19 +444,30 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         self.assertEqual(3, len(fitter.getFitterSteps()))
         fit1.setGroupDataWeight("bottom", 0.5)
         fit1.setGroupDataWeight("sides", 0.1)
+        fit1.setGroupDataSlidingFactor("bottom", 0.4)
+        fit1.setGroupDataSlidingFactor("sides", 0.6)
+        fit1.setGroupDataSlidingFactor(None, 0.1)
         groupNames = fit1.getGroupSettingsNames()
-        self.assertEqual(2, len(groupNames))
+        self.assertEqual(3, len(groupNames))
         self.assertEqual((0.5, True, False), fit1.getGroupDataWeight("bottom"))
         self.assertEqual((0.1, True, False), fit1.getGroupDataWeight("sides"))
+        self.assertEqual((0.4, True, False), fit1.getGroupDataSlidingFactor("bottom"))
+        self.assertEqual((0.6, True, False), fit1.getGroupDataSlidingFactor("sides"))
+        self.assertEqual((0.1, True, False), fit1.getGroupDataSlidingFactor(None))
         fit1.setGroupCurvaturePenalty(None, [0.01])
         fit1.setNumberOfIterations(1)  # only first iteration is not subject to find mesh location algorithm changes
         fit1.setUpdateReferenceState(False)
         fit1.run()
         dataWeightField = fieldmodule.findFieldByName("data_weight").castFiniteElement()
         self.assertTrue(dataWeightField.isValid())
-        groupData = {"bottom": (72, 0.5), "sides": (144, 0.1), "top": (72, 1.0)}
+
+        groupData = {
+            "bottom": (72, [0.2, 0.2, 0.5]),
+            "sides": (144, [0.06, 0.06, 0.1]),
+            "top": (72, [0.1, 0.1, 1.0])
+        }
         for groupName in groupData.keys():
-            expectedSize, expectedWeight = groupData[groupName]
+            expectedSize, expectedOrientedWeight = groupData[groupName]
             group = fieldmodule.findFieldByName(groupName).castGroup()
             dataGroup = fitter.getGroupDataProjectionNodesetGroup(group)
             size = dataGroup.getSize()
@@ -461,19 +476,19 @@ class FitCubeToSphereTestCase(unittest.TestCase):
             node = dataIterator.next()
             while node.isValid():
                 fieldcache.setNode(node)
-                result, weight = dataWeightField.evaluateReal(fieldcache, 1)
+                result, orientedWeight = dataWeightField.evaluateReal(fieldcache, 3)
                 self.assertEqual(result, RESULT_OK)
-                self.assertAlmostEqual(weight, expectedWeight, delta=1.0E-10)
+                assertAlmostEqualList(self, orientedWeight, expectedOrientedWeight, delta=1.0E-10)
                 node = dataIterator.next()
 
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 3.4214745492787313, delta=1.0E-4)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(volume, 0.530434946775425, delta=1.0E-4)
+        self.assertAlmostEqual(surfaceArea, 3.4196885687102254, delta=1.0E-4)
+        self.assertAlmostEqual(volume, 0.5325923240916991, delta=1.0E-4)
 
-        # subsequent iterations produce different results when the find mesh location algorithm changes
+        # subsequent iterations produce slightly different results when the find mesh location algorithm changes
 
         fit2 = FitterStepFit()
         fitter.addFitterStep(fit2)
@@ -484,10 +499,10 @@ class FitCubeToSphereTestCase(unittest.TestCase):
 
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 3.2324567941378644, delta=1.0E-4)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(volume, 0.5155326610247232, delta=1.0E-4)
+        self.assertAlmostEqual(surfaceArea, 3.1862342511802897, delta=1.0E-4)
+        self.assertAlmostEqual(volume, 0.5070277781766891, delta=1.0E-4)
 
     def test_groupSettings(self):
         """

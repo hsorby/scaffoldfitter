@@ -13,6 +13,7 @@ class FitterStepFit(FitterStep):
 
     _jsonTypeId = "_FitterStepFit"
     _dataWeightToken = "dataWeight"
+    _dataSlidingFactorToken = "dataSlidingFactor"
     _strainPenaltyToken = "strainPenalty"
     _curvaturePenaltyToken = "curvaturePenalty"
 
@@ -91,13 +92,60 @@ class FitterStepFit(FitterStep):
         :param groupName:  Exact model group name, or None for default group.
         :param weight:  Float valued weight >= 0.0, or None to reset to global
         default. Function ensures value is valid.
+        Weight is a real value multiplying the data projection error. Higher
+        values for a group make the fit more closely match its data relative to
+        other groups. It is recommended that the default group data weight be
+        kept at 1.0 and other weights or penalties changed relative to it.
         """
         if weight is not None:
             if not isinstance(weight, float):
-                weight = self.getGroupDataWeight(groupName)[0]
-            elif weight < 0.0:
+                return
+            if weight < 0.0:
                 weight = 0.0
         self.setGroupSetting(groupName, self._dataWeightToken, weight)
+
+    def clearGroupDataSlidingFactor(self, groupName):
+        """
+        Clear group data sliding factor so fall back to last fit or global default.
+        :param groupName:  Exact model group name, or None for default group.
+        """
+        self.clearGroupSetting(groupName, self._dataSlidingFactorToken)
+
+    def getGroupDataSlidingFactor(self, groupName):
+        """
+        Get group data sliding factor to apply in fit, and associated flags.
+        If not set or inherited, gets value from default group.
+        :param groupName:  Exact model group name, or None for default group.
+        :return: Sliding factor, setLocally, inheritable.
+        Sliding factor is a real value >= 0.0 which multiplies group weight in
+        in sliding directions.
+        Default value 0.0 gives zero sliding resistance.
+        The second return value is True if the value is set locally to a value
+        or None if reset locally.
+        The third return value is True if a previous config has set the value.
+        """
+        return self.getGroupSetting(groupName, self._dataSlidingFactorToken, 0.0)
+
+    def setGroupDataSlidingFactor(self, groupName, slidingFactor):
+        """
+        Set group data sliding weight to apply in fit, or reset to use default.
+        :param groupName:  Exact model group name, or None for default group.
+        :param slidingFactor:  Float value >= 0.0, or None to reset to global
+        default. Function ensures value is valid.
+        Sliding factor is a real value >= 0.0 which multiplies group weight in
+        in sliding directions (two directions for surfaces, one for lines).
+        Default value 0.0 gives zero sliding resistance.
+        A small positive value << 1.0 may aid stability if unsufficient other
+        constraints from markers, line groups, multiple groups, and curvature.
+        Higher values increasingly apply stretch to the span of data points,
+        but also limit movement which can lead to tangential wrinkling.
+        """
+        if slidingFactor is not None:
+            if not isinstance(slidingFactor, float):
+                return
+            if slidingFactor < 0.0:
+                slidingFactor = 0.0
+        self.setGroupSetting(groupName, self._dataSlidingFactorToken, slidingFactor)
 
     def clearGroupStrainPenalty(self, groupName: str):
         """
@@ -328,15 +376,17 @@ class FitterStepFit(FitterStep):
         fieldmodule = self._fitter.getFieldmodule()
         delta = self._fitter.getDataDeltaField()
         weight = self._fitter.getDataWeightField()
-        deltaSq = fieldmodule.createFieldDotProduct(delta, delta)
-        # dataProjectionInDirection = fieldmodule.createFieldDotProduct(
-        #     dataProjectionDelta, self._fitter.getDataProjectionDirectionField())
-        # dataProjectionInDirection = fieldmodule.createFieldMagnitude(dataProjectionDelta)
-        # dataProjectionInDirection = dataProjectionDelta
-        # dataProjectionInDirection = fieldmodule.createFieldConstant(
-        #     [ weight/dataScale ]*dataProjectionDelta.getNumberOfComponents()) * dataProjectionDelta
+        # non-oriented data for full n-way constraints
+        # deltaSq = fieldmodule.createFieldDotProduct(delta, delta)
+        # oriented delta aligns with tangents and normals to mesh groups so can set separate
+        # sliding constraints for line/surface projections, full constraint for marker points
+        dataProjectionOrientation = self._fitter.getDataProjectionOrientationField()
+        orientedDelta = fieldmodule.createFieldMatrixMultiply(
+            delta.getNumberOfComponents(), dataProjectionOrientation, delta)
+        deltaSq = fieldmodule.createFieldMultiply(orientedDelta, orientedDelta)
+        weightedDeltaSq = fieldmodule.createFieldDotProduct(weight, deltaSq)
         dataProjectionObjective = fieldmodule.createFieldNodesetSum(
-            weight*deltaSq, self._fitter.getActiveDataNodesetGroup())
+            weightedDeltaSq, self._fitter.getActiveDataNodesetGroup())
         dataProjectionObjective.setElementMapField(self._fitter.getDataHostLocationField())
         return dataProjectionObjective
 
