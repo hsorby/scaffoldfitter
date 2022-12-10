@@ -14,6 +14,7 @@ class FitterStepFit(FitterStep):
     _jsonTypeId = "_FitterStepFit"
     _dataWeightToken = "dataWeight"
     _dataSlidingFactorToken = "dataSlidingFactor"
+    _dataStretchToken = "dataStretch"
     _strainPenaltyToken = "strainPenalty"
     _curvaturePenaltyToken = "curvaturePenalty"
 
@@ -132,6 +133,42 @@ class FitterStepFit(FitterStep):
             if slidingFactor < 0.0:
                 slidingFactor = 0.0
         self.setGroupSetting(groupName, self._dataSlidingFactorToken, slidingFactor)
+
+    def clearGroupDataStretch(self, groupName):
+        """
+        Clear local group data stretch so fall back to last config or global default.
+        :param groupName:  Exact model group name, or None for default group.
+        """
+        self.clearGroupSetting(groupName, self._dataStretchToken)
+
+    def getGroupDataStretch(self, groupName):
+        """
+        Get flag controlling whether tangential projections have the full
+        data weight applied to them to stretch the model to the span of data
+        with zero/low sliding factor. Default is True/on.
+        :param groupName:  Exact model group name, or None for default group.
+        :return:  Data stretch flag, setLocally, inheritable.
+        The second return value is True if the value is set locally to a value
+        or None if reset locally.
+        The third return value is True if a previous config has set the value.
+        """
+        return self.getGroupSetting(groupName, self._dataStretchToken, True)
+
+    def setGroupDataStretch(self, groupName, dataStretch):
+        """
+        Set flag controlling whether tangential projections have the full
+        data weight applied to them to stretch the model to the span of data
+        with zero/low sliding factor. Turn off for groups such as inlet/outlet
+        tubes where specimens show quite variable length, so feature is oriented
+        with the data but keeps its length from the reference scaffold.
+        :param groupName:  Exact model group name, or None for default group.
+        :param dataStretch:  Boolean True/False or None to reset to global
+        default. Function ensures value is valid.
+        """
+        if dataStretch is not None:
+            if not isinstance(dataStretch, bool):
+                return
+        self.setGroupSetting(groupName, self._dataStretchToken, dataStretch)
 
     def clearGroupStrainPenalty(self, groupName: str):
         """

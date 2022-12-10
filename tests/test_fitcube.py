@@ -485,8 +485,8 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         self.assertEqual(result, RESULT_OK)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 3.4196885687102254, delta=1.0E-4)
-        self.assertAlmostEqual(volume, 0.5325923240916991, delta=1.0E-4)
+        self.assertAlmostEqual(surfaceArea, 3.3460139217396243, delta=1.0E-4)
+        self.assertAlmostEqual(volume, 0.5217478266861153, delta=1.0E-4)
 
         # subsequent iterations produce slightly different results when the find mesh location algorithm changes
 
@@ -501,8 +501,8 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         self.assertEqual(result, RESULT_OK)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 3.1862342511802897, delta=1.0E-4)
-        self.assertAlmostEqual(volume, 0.5070277781766891, delta=1.0E-4)
+        self.assertAlmostEqual(surfaceArea, 3.187490694645035, delta=1.0E-4)
+        self.assertAlmostEqual(volume, 0.5072619397447008, delta=1.0E-4)
 
     def test_groupSettings(self):
         """

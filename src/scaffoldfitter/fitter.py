@@ -646,14 +646,30 @@ class Fitter:
                         orientedDataWeight = [slidingWeight, slidingWeight, dataWeight]
                     else:  # coordinatesCount == 2:
                         orientedDataWeight = [slidingWeight, slidingWeight]  # not expected
-                # print("group", groupName, "meshDimension", meshDimension,
-                #     "weight", dataWeight, "sliding factor", dataSlidingFactor)
-                fieldassignment = self._dataWeightField.createFieldassignment(
-                    self._fieldmodule.createFieldConstant(orientedDataWeight))
+                stretchOrientedDataWeight = [dataWeight] + orientedDataWeight[1:]
+                weightField = self._fieldmodule.createFieldConstant(orientedDataWeight)
+                dataStretch = fitterStepFit.getGroupDataStretch(groupName)[0]
+                if dataStretch:
+                    tangent1 = self._fieldmodule.createFieldComponent(
+                        self._dataProjectionOrientationField,
+                        [1, 2, 3] if (coordinatesCount == 3) else [1, 2] if (coordinatesCount == 2) else [1])
+                    weightField = self._fieldmodule.createFieldIf(
+                        self._fieldmodule.createFieldGreaterThan(
+                            self._fieldmodule.createFieldDotProduct(self._dataDeltaField, tangent1),
+                            self._fieldmodule.createFieldConstant([0.01]) *
+                            self._fieldmodule.createFieldMagnitude(self._dataDeltaField)),
+                        self._fieldmodule.createFieldConstant(stretchOrientedDataWeight),
+                        weightField)
+                    del tangent1
+                if self._diagnosticLevel > 0:
+                    print("group", groupName, "mesh dimension", meshDimension, "data weight", dataWeight,
+                          "sliding factor", dataSlidingFactor, "stretch", dataStretch)
+                fieldassignment = self._dataWeightField.createFieldassignment(weightField)
                 fieldassignment.setNodeset(dataGroup)
                 result = fieldassignment.assign()
                 if result != RESULT_OK:
                     print("Incomplete assignment of data weight for group", groupName, "Result", result)
+                del weightField
             if self._markerDataLocationGroup:
                 markerWeight = fitterStepFit.getGroupDataWeight(self._markerGroupName)[0]
                 orientedDataWeight = [markerWeight] * coordinatesCount
@@ -1298,6 +1314,8 @@ class Fitter:
                         faceLocationField = self._fieldmodule.createFieldFindMeshLocation(
                             self._dataHostCoordinatesField, self._modelCoordinatesField,
                             self._activeDataProjectionMeshGroups[meshDimension - 1])
+                        # in theory SEARCH_MODE_EXACT should work, however tests fail
+                        faceLocationField.setSearchMode(FieldFindMeshLocation.SEARCH_MODE_NEAREST)
                     d1 = self._fieldmodule.createFieldDerivative(self._modelCoordinatesField, 1)
                     if meshDimension == 1:
                         d1 = self._fieldmodule.createFieldNormalise(d1)
