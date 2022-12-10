@@ -38,20 +38,6 @@ class FitterStepFit(FitterStep):
         self._numberOfIterations = dct["numberOfIterations"]
         self._maximumSubIterations = dct["maximumSubIterations"]
         self._updateReferenceState = dct["updateReferenceState"]
-        # migrate legacy settings
-        lineWeight = dct.get("lineWeight")
-        if lineWeight is not None:
-            print("Legacy lineWeight attribute ignored as feature removed", file=sys.stderr)
-        markerWeight = dct.get("markerWeight")
-        if markerWeight is not None:
-            print("Legacy markerWeight attribute ignored as feature removed", file=sys.stderr)
-        # convert legacy single-valued strain and curvature penalty weights to list:
-        strainPenaltyWeight = dct.get("strainPenaltyWeight")
-        if strainPenaltyWeight is not None:
-            self.setGroupStrainPenalty(None, [strainPenaltyWeight])
-        curvaturePenaltyWeight = dct.get("curvaturePenaltyWeight")
-        if curvaturePenaltyWeight is not None:
-            self.setGroupCurvaturePenalty(None, [curvaturePenaltyWeight])
 
     def encodeSettingsJSONDict(self) -> dict:
         """
