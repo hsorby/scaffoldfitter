@@ -2,6 +2,7 @@ import math
 import os
 import unittest
 from opencmiss.utils.zinc.field import createFieldMeshIntegral
+from opencmiss.utils.zinc.finiteelement import find_node_with_name
 from opencmiss.zinc.field import Field
 from opencmiss.zinc.node import Node, Nodeset
 from opencmiss.zinc.result import RESULT_OK
@@ -219,6 +220,28 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         s2 = fitter.encodeSettingsJSON()
         self.assertEqual(s, s2)
 
+    def test_alignMarkersScaleProportion(self):
+        """
+        Test automatic alignment of model and data using fiducial markers, using scale proportion 0.9.
+        """
+        zinc_model_file = os.path.join(here, "resources", "cube_to_sphere.exf")
+        zinc_data_file = os.path.join(here, "resources", "cube_to_sphere_data_regular.exf")
+        fitter = Fitter(zinc_model_file, zinc_data_file)
+        fitter.load()
+
+        align = FitterStepAlign()
+        fitter.addFitterStep(align)
+        self.assertEqual(2, len(fitter.getFitterSteps()))
+        self.assertTrue(align.setAlignMarkers(True))
+        self.assertTrue(align.isAlignMarkers())
+        scaleProportion = 0.9
+        self.assertTrue(align.setScaleProportion(scaleProportion))
+        self.assertEqual(scaleProportion, align.getScaleProportion())
+        align.run()
+
+        scale = align.getScale()
+        self.assertAlmostEqual(scale, scaleProportion * 0.8047378476539072, places=5)
+
     def test_alignGroupsFitEllipsoidRegularData(self):
         """
         Test automatic alignment of model and data using groups & fit two cubes model to ellipsoid data.
@@ -302,10 +325,10 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fit1.run()
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 11.097773862300704, delta=1.0E-4)
+        self.assertAlmostEqual(surfaceArea, 11.263113922951398, delta=1.0E-4)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(volume, 2.323461787566051, delta=1.0E-4)
+        self.assertAlmostEqual(volume, 2.2557037278752086, delta=1.0E-4)
 
         # test fibre orientation field
         fitter.load()
@@ -321,10 +344,10 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fit1.run()
         # get end node coordinate to prove twist 
         nodeExpectedCoordinates = {
-            3: [0.8487623099139301, -0.5012613734076182, -0.5306482017126274],
-            6: [0.8487623092159226, 0.2617063557585618, -0.5464896371028911],
-            9: [0.8487623062422882, -0.2617063537282271, 0.5464896401724635],
-            12: [0.8487623124370356, 0.5012613792923117, 0.5306482045212996]}
+            3: [0.8887749296131011, -0.48098055740637335, -0.5386959783454016],
+            6: [0.8797858554332283, 0.46116923672824744, -0.5527908283491083],
+            9: [0.8797858541365591, -0.4611692322900598, 0.5527908321128361],
+            12: [0.8887749312177851, 0.48098056254503413, 0.5386959806235349]}
         fieldcache = fieldmodule.createFieldcache()
         nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
         for nodeIdentifier, expectedCoordinates in nodeExpectedCoordinates.items():
@@ -636,6 +659,74 @@ class FitCubeToSphereTestCase(unittest.TestCase):
                 fieldcache.setNode(node)
                 result, x = modelCoordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, 3)
                 assertAlmostEqualList(self, x, expectedAlignedNodes[nodeIdentifier - 1], delta=1.0E-3)
+
+    def test_modelFitGroupMarkers(self):
+        """
+        Test fitting with model fit group properly moves markers on boundary, and ignores markers outside.
+        File two_cubes_hermite_nocross_groups.exf now has 3 marker points: outside, boundary and inside for this.
+        """
+        zinc_model_file = os.path.join(here, "resources", "two_cubes_hermite_nocross_groups.exf")
+        zinc_data_file = os.path.join(here, "resources", "two_cubes_ellipsoid_data_regular_markers.exf")
+        fitter = Fitter(zinc_model_file, zinc_data_file)
+        fitter.setDiagnosticLevel(1)
+        fitter.load()
+
+        fieldmodule = fitter.getFieldmodule()
+        mesh = fitter.getHighestDimensionMesh()
+        self.assertEqual(2, mesh.getSize())
+        element1 = mesh.findElementByIdentifier(1)
+        self.assertTrue(element1.isValid())
+        element2 = mesh.findElementByIdentifier(2)
+        self.assertTrue(element2.isValid())
+        groupTwo = fieldmodule.findFieldByName("two").castGroup()
+        self.assertTrue(groupTwo.isValid())
+
+        markerGroup = fitter.getMarkerGroup()
+        self.assertTrue(markerGroup.isValid())
+        markerDataGroup, markerDataCoordinates, markerDataName = fitter.getMarkerDataFields()
+        dataHostLocation = fitter.getDataHostLocationField()
+        activeDataNodesetGroup = fitter.getActiveDataNodesetGroup()
+
+        fieldcache = fieldmodule.createFieldcache()
+        TOL = 1.0E-12
+
+        expectedMarkerDataLocations = {
+            "outside": (element1, [0.5, 0.5, 0.5]),
+            "boundary": (element1, [1.0, 0.5, 0.5]),
+            "inside": (element2, [0.5, 0.5, 0.5]),
+        }
+        expectedMarkerDataLocationsModelFitGroup = {
+            "outside": (None, None),
+            "boundary": (element2, [0.0, 0.5, 0.5]),
+            "inside": (element2, [0.5, 0.5, 0.5]),
+        }
+
+        for i in range(3):
+
+            expectedLocations = expectedMarkerDataLocations
+            if i == 1:
+                fitter.setModelFitGroup(groupTwo)
+                expectedLocations = expectedMarkerDataLocationsModelFitGroup
+            elif i == 2:
+                fitter.setModelFitGroup(None)  # test changing back to whole mesh
+            markerDataLocationNodesetGroup = fitter.getMarkerDataLocationNodesetGroup()  # as recreated each time
+
+            for name, expectedLocation in expectedLocations.items():
+                markerNode = find_node_with_name(markerDataGroup, markerDataName, name)
+                fieldcache.setNode(markerNode)
+                element, xi = dataHostLocation.evaluateMeshLocation(fieldcache, 3)
+                if not expectedLocation[0]:
+                    self.assertFalse(element.isValid())
+                    self.assertFalse(markerDataLocationNodesetGroup.containsNode(markerNode))
+                    self.assertFalse(activeDataNodesetGroup.containsNode(markerNode))
+                    continue
+                self.assertTrue(element.isValid())
+                self.assertTrue(markerDataLocationNodesetGroup.containsNode(markerNode))
+                self.assertTrue(activeDataNodesetGroup.containsNode(markerNode))
+                self.assertEqual(expectedLocation[0], element)
+                self.assertAlmostEqual(expectedLocation[1][0], xi[0], delta=TOL)
+                self.assertAlmostEqual(expectedLocation[1][1], xi[1], delta=TOL)
+                self.assertAlmostEqual(expectedLocation[1][2], xi[2], delta=TOL)
 
 
 if __name__ == "__main__":
