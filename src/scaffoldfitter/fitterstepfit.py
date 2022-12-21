@@ -13,6 +13,8 @@ class FitterStepFit(FitterStep):
 
     _jsonTypeId = "_FitterStepFit"
     _dataWeightToken = "dataWeight"
+    _dataSlidingFactorToken = "dataSlidingFactor"
+    _dataStretchToken = "dataStretch"
     _strainPenaltyToken = "strainPenalty"
     _curvaturePenaltyToken = "curvaturePenalty"
 
@@ -37,20 +39,6 @@ class FitterStepFit(FitterStep):
         self._numberOfIterations = dct["numberOfIterations"]
         self._maximumSubIterations = dct["maximumSubIterations"]
         self._updateReferenceState = dct["updateReferenceState"]
-        # migrate legacy settings
-        lineWeight = dct.get("lineWeight")
-        if lineWeight is not None:
-            print("Legacy lineWeight attribute ignored as feature removed", file=sys.stderr)
-        markerWeight = dct.get("markerWeight")
-        if markerWeight is not None:
-            print("Legacy markerWeight attribute ignored as feature removed", file=sys.stderr)
-        # convert legacy single-valued strain and curvature penalty weights to list:
-        strainPenaltyWeight = dct.get("strainPenaltyWeight")
-        if strainPenaltyWeight is not None:
-            self.setGroupStrainPenalty(None, [strainPenaltyWeight])
-        curvaturePenaltyWeight = dct.get("curvaturePenaltyWeight")
-        if curvaturePenaltyWeight is not None:
-            self.setGroupCurvaturePenalty(None, [curvaturePenaltyWeight])
 
     def encodeSettingsJSONDict(self) -> dict:
         """
@@ -91,13 +79,98 @@ class FitterStepFit(FitterStep):
         :param groupName:  Exact model group name, or None for default group.
         :param weight:  Float valued weight >= 0.0, or None to reset to global
         default. Function ensures value is valid.
+        Weight is a real value multiplying the data projection error. Higher
+        values for a group make the fit more closely match its data relative to
+        other groups. It is recommended that the default group data weight be
+        kept at 1.0 and other weights or penalties changed relative to it.
         """
         if weight is not None:
             if not isinstance(weight, float):
-                weight = self.getGroupDataWeight(groupName)[0]
-            elif weight < 0.0:
+                return
+            if weight < 0.0:
                 weight = 0.0
         self.setGroupSetting(groupName, self._dataWeightToken, weight)
+
+    def clearGroupDataSlidingFactor(self, groupName):
+        """
+        Clear group data sliding factor so fall back to last fit or global default.
+        :param groupName:  Exact model group name, or None for default group.
+        """
+        self.clearGroupSetting(groupName, self._dataSlidingFactorToken)
+
+    def getGroupDataSlidingFactor(self, groupName):
+        """
+        Get group data sliding factor to apply in fit, and associated flags.
+        If not set or inherited, gets value from default group.
+        :param groupName:  Exact model group name, or None for default group.
+        :return: Sliding factor, setLocally, inheritable.
+        Sliding factor is a real value >= 0.0 which multiplies group weight in
+        sliding directions.
+        Default value 0.1 gives some sliding resistance.
+        The second return value is True if the value is set locally to a value
+        or None if reset locally.
+        The third return value is True if a previous config has set the value.
+        """
+        return self.getGroupSetting(groupName, self._dataSlidingFactorToken, 0.1)
+
+    def setGroupDataSlidingFactor(self, groupName, slidingFactor):
+        """
+        Set group data sliding weight to apply in fit, or reset to use default.
+        :param groupName:  Exact model group name, or None for default group.
+        :param slidingFactor:  Float value >= 0.0, or None to reset to global
+        default. Function ensures value is valid.
+        Sliding factor is a real value >= 0.0 which multiplies group weight in
+        sliding directions (two directions for surfaces, one for lines).
+        Default value 0.1 gives some sliding resistance.
+        Setting value 0.0 gives zero sliding resistance.
+        A small positive value << 1.0 may aid stability where there is
+        insufficient constraint from markers, line groups, multiple groups
+        and inherent shape.
+        Higher values increasingly apply stretch to the span of data points,
+        but also limit movement which can lead to tangential wrinkling.
+        """
+        if slidingFactor is not None:
+            if not isinstance(slidingFactor, float):
+                return
+            if slidingFactor < 0.0:
+                slidingFactor = 0.0
+        self.setGroupSetting(groupName, self._dataSlidingFactorToken, slidingFactor)
+
+    def clearGroupDataStretch(self, groupName):
+        """
+        Clear local group data stretch so fall back to last config or global default.
+        :param groupName:  Exact model group name, or None for default group.
+        """
+        self.clearGroupSetting(groupName, self._dataStretchToken)
+
+    def getGroupDataStretch(self, groupName):
+        """
+        Get flag controlling whether tangential projections have the full
+        data weight applied to them to stretch the model to the span of data
+        with zero/low sliding factor. Default is True/on.
+        :param groupName:  Exact model group name, or None for default group.
+        :return:  Data stretch flag, setLocally, inheritable.
+        The second return value is True if the value is set locally to a value
+        or None if reset locally.
+        The third return value is True if a previous config has set the value.
+        """
+        return self.getGroupSetting(groupName, self._dataStretchToken, True)
+
+    def setGroupDataStretch(self, groupName, dataStretch):
+        """
+        Set flag controlling whether tangential projections have the full
+        data weight applied to them to stretch the model to the span of data
+        with zero/low sliding factor. Turn off for groups such as inlet/outlet
+        tubes where specimens show quite variable length, so feature is oriented
+        with the data but keeps its length from the reference scaffold.
+        :param groupName:  Exact model group name, or None for default group.
+        :param dataStretch:  Boolean True/False or None to reset to global
+        default. Function ensures value is valid.
+        """
+        if dataStretch is not None:
+            if not isinstance(dataStretch, bool):
+                return
+        self.setGroupSetting(groupName, self._dataStretchToken, dataStretch)
 
     def clearGroupStrainPenalty(self, groupName: str):
         """
@@ -328,15 +401,17 @@ class FitterStepFit(FitterStep):
         fieldmodule = self._fitter.getFieldmodule()
         delta = self._fitter.getDataDeltaField()
         weight = self._fitter.getDataWeightField()
-        deltaSq = fieldmodule.createFieldDotProduct(delta, delta)
-        # dataProjectionInDirection = fieldmodule.createFieldDotProduct(
-        #     dataProjectionDelta, self._fitter.getDataProjectionDirectionField())
-        # dataProjectionInDirection = fieldmodule.createFieldMagnitude(dataProjectionDelta)
-        # dataProjectionInDirection = dataProjectionDelta
-        # dataProjectionInDirection = fieldmodule.createFieldConstant(
-        #     [ weight/dataScale ]*dataProjectionDelta.getNumberOfComponents()) * dataProjectionDelta
+        # non-oriented data for full n-way constraints
+        # deltaSq = fieldmodule.createFieldDotProduct(delta, delta)
+        # oriented delta aligns with tangents and normals to mesh groups so can set separate
+        # sliding constraints for line/surface projections, full constraint for marker points
+        dataProjectionOrientation = self._fitter.getDataProjectionOrientationField()
+        orientedDelta = fieldmodule.createFieldMatrixMultiply(
+            delta.getNumberOfComponents(), dataProjectionOrientation, delta)
+        deltaSq = fieldmodule.createFieldMultiply(orientedDelta, orientedDelta)
+        weightedDeltaSq = fieldmodule.createFieldDotProduct(weight, deltaSq)
         dataProjectionObjective = fieldmodule.createFieldNodesetSum(
-            weight*deltaSq, self._fitter.getActiveDataNodesetGroup())
+            weightedDeltaSq, self._fitter.getActiveDataNodesetGroup())
         dataProjectionObjective.setElementMapField(self._fitter.getDataHostLocationField())
         return dataProjectionObjective
 

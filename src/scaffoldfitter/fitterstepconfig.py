@@ -25,10 +25,6 @@ class FitterStepConfig(FitterStep):
         Decode definition of step from JSON dict.
         """
         super().decodeSettingsJSONDict(dctIn)  # to decode group settings
-        # migrate legacy settings
-        projectionCentreGroups = dctIn.get("projectionCentreGroups")
-        if projectionCentreGroups is not None:
-            self.setProjectionCentreGroups(projectionCentreGroups)
 
     def encodeSettingsJSONDict(self) -> dict:
         """
@@ -72,20 +68,6 @@ class FitterStepConfig(FitterStep):
             if not isinstance(centralProjection, bool):
                 centralProjection = False
         self.setGroupSetting(groupName, self._centralProjectionToken, centralProjection)
-
-    def isProjectionCentreGroups(self):
-        """
-        :deprecated: use isGroupCentralProjection.
-        """
-        print("Config isProjectionCentreGroups is deprecated", file=sys.stderr)
-        return self.getGroupCentralProjection(None)[0]
-
-    def setProjectionCentreGroups(self, projectionCentreGroups):
-        """
-        :deprecated: use setGroupCentralProjection.
-        """
-        print("Config setProjectionCentreGroups is deprecated", file=sys.stderr)
-        self.setGroupCentralProjection(None, projectionCentreGroups)
 
     def clearGroupDataProportion(self, groupName):
         """

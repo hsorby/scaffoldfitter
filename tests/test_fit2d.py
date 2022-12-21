@@ -25,6 +25,9 @@ class Fit2dTestCase(unittest.TestCase):
         fitter.addFitterStep(fit1)
         self.assertEqual(2, len(fitter.getFitterSteps()))
         fit1.setGroupCurvaturePenalty(None, [100.0])
+        # this example requires a non-zero data sliding factor for stability as just a flat surface
+        fit1.setGroupDataSlidingFactor(None, 0.01)
+        self.assertEqual((0.01, True, False), fit1.getGroupDataSlidingFactor(None))
         # can't use a curvature penalty without a fibre field
         with self.assertRaises(AssertionError) as cm:
             fit1.run()
