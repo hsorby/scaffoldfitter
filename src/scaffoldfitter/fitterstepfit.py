@@ -105,13 +105,13 @@ class FitterStepFit(FitterStep):
         :param groupName:  Exact model group name, or None for default group.
         :return: Sliding factor, setLocally, inheritable.
         Sliding factor is a real value >= 0.0 which multiplies group weight in
-        in sliding directions.
-        Default value 0.0 gives zero sliding resistance.
+        sliding directions.
+        Default value 0.1 gives some sliding resistance.
         The second return value is True if the value is set locally to a value
         or None if reset locally.
         The third return value is True if a previous config has set the value.
         """
-        return self.getGroupSetting(groupName, self._dataSlidingFactorToken, 0.0)
+        return self.getGroupSetting(groupName, self._dataSlidingFactorToken, 0.1)
 
     def setGroupDataSlidingFactor(self, groupName, slidingFactor):
         """
@@ -120,10 +120,12 @@ class FitterStepFit(FitterStep):
         :param slidingFactor:  Float value >= 0.0, or None to reset to global
         default. Function ensures value is valid.
         Sliding factor is a real value >= 0.0 which multiplies group weight in
-        in sliding directions (two directions for surfaces, one for lines).
-        Default value 0.0 gives zero sliding resistance.
-        A small positive value << 1.0 may aid stability if unsufficient other
-        constraints from markers, line groups, multiple groups, and curvature.
+        sliding directions (two directions for surfaces, one for lines).
+        Default value 0.1 gives some sliding resistance.
+        Setting value 0.0 gives zero sliding resistance.
+        A small positive value << 1.0 may aid stability where there is
+        insufficient constraint from markers, line groups, multiple groups
+        and inherent shape.
         Higher values increasingly apply stretch to the span of data points,
         but also limit movement which can lead to tangential wrinkling.
         """
