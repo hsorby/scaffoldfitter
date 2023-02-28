@@ -4,7 +4,7 @@ Fit step for gross alignment and scale.
 import copy
 import math
 
-from opencmiss.maths.vectorops import add, div, euler_to_rotation_matrix, matrix_vector_mult, mult, sub
+from opencmiss.maths.vectorops import add, div, euler_to_rotation_matrix, matrix_vector_mult, mult, sub, identity_matrix
 from opencmiss.utils.zinc.field import get_group_list, create_field_euler_angles_rotation_matrix
 from opencmiss.utils.zinc.finiteelement import evaluate_field_nodeset_mean, getNodeNameCentres
 from opencmiss.utils.zinc.general import ChangeManager
@@ -298,11 +298,7 @@ class FitterStepAlign(FitterStep):
                 [0.0, self._scale, 0.0, self._translation[1]],
                 [0.0, 0.0, self._scale, self._translation[2]],
                 [0.0, 0.0, 0.0, 1.0]]
-        return [
-            [1.0, 0.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0]]
+        return identity_matrix(4)
 
     def _optimiseAlignment(self, pointMap):
         """
