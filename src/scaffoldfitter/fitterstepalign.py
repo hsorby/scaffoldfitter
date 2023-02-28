@@ -35,7 +35,7 @@ def createFieldsTransformations(coordinates: Field, rotation_angles=None, scale_
         translation_offsets = [0.0, 0.0, 0.0]
     components_count = coordinates.getNumberOfComponents()
     assert (components_count == 3) and (len(rotation_angles) == components_count) and isinstance(scale_value, float) \
-           and (len(translation_offsets) == components_count), "createFieldsTransformations.  Invalid arguments"
+        and (len(translation_offsets) == components_count), "createFieldsTransformations.  Invalid arguments"
     fieldmodule = coordinates.getFieldmodule()
     with ChangeManager(fieldmodule):
         # Rotate, scale, and translate model, in that order
@@ -204,7 +204,7 @@ class FitterStepAlign(FitterStep):
             # rotate, scale and translate model
             modelCoordinatesTransformed = createFieldsTransformations(
                 modelCoordinates, self._rotation, self._scale, self._translation)[0]
-            fieldassignment = self._fitter.getModelCoordinatesField().createFieldassignment(modelCoordinatesTransformed)
+            fieldassignment = modelCoordinates.createFieldassignment(modelCoordinatesTransformed)
             result = fieldassignment.assign()
             assert result in [RESULT_OK, RESULT_WARNING_PART_DONE], "Align:  Failed to transform model"
             self._fitter.updateModelReferenceCoordinates()
@@ -278,6 +278,31 @@ class FitterStepAlign(FitterStep):
                     print("Align:  Data marker '" + dataName + "' not found in model")
 
         self._optimiseAlignment(pointMap)
+
+    def getTransformationMatrix(self):
+        '''
+        :return: 4x4 row-major transformation matrix with first index down rows, second across columns,
+        suitable for multiplication p' = Mp where p = [ x, y, z, h ].
+        '''
+        # apply transformation in order: scale then rotation then translation
+        if not all((v == 0.0) for v in self._rotation):
+            rotationMatrix = euler_to_rotation_matrix(self._rotation)
+            return [
+                [rotationMatrix[0][0]*self._scale, rotationMatrix[0][1]*self._scale, rotationMatrix[0][2]*self._scale, self._translation[0]],
+                [rotationMatrix[1][0]*self._scale, rotationMatrix[1][1]*self._scale, rotationMatrix[1][2]*self._scale, self._translation[1]],
+                [rotationMatrix[2][0]*self._scale, rotationMatrix[2][1]*self._scale, rotationMatrix[2][2]*self._scale, self._translation[2]],
+                [0.0, 0.0, 0.0, 1.0]]
+        if not (self._scale == 1.0 and all((v == 0.0) for v in self._translation)):
+            return [
+                [self._scale, 0.0, 0.0, self._translation[0]],
+                [0.0, self._scale, 0.0, self._translation[1]],
+                [0.0, 0.0, self._scale, self._translation[2]],
+                [0.0, 0.0, 0.0, 1.0]]
+        return [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0]]
 
     def _optimiseAlignment(self, pointMap):
         """
@@ -425,6 +450,7 @@ class FitterStepAlign(FitterStep):
         rotationMatrix = euler_to_rotation_matrix(self._rotation)
         self._translation = sub(add(mult(unitTranslation, dataScale), dataCM),
                                 mult(matrix_vector_mult(rotationMatrix, modelCM), self._scale))
+
 
 def evaluate_field_mesh_integral(field: Field, coordinates: Field, mesh: Mesh, number_of_points=4):
     """
