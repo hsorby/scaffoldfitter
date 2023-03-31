@@ -21,9 +21,9 @@ readme = readfile("README.rst", split=True)
 # into the 'requirements.txt' file.
 requires = [
     # minimal requirements listing
-    "opencmiss.maths",
-    "opencmiss.utils >= 0.3",
-    "opencmiss.zinc >= 3.10"
+    "cmlibs.maths",
+    "cmlibs.utils >= 0.3",
+    "cmlibs.zinc >= 3.99"
 ]
 readme.extend(['', 'License', '=======', '', '::', ''])
 source_license = readfile("LICENSE")
@@ -31,7 +31,7 @@ source_license = readfile("LICENSE")
 setup(
     name="scaffoldfitter",
     version="0.6.0",
-    description="Scaffold/model geometric fitting library using OpenCMISS-Zinc.",
+    description="Scaffold/model geometric fitting library using Zinc.",
     long_description="\n".join(readme) + source_license,
     long_description_content_type="text/x-rst",
     classifiers=[

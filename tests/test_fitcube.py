@@ -1,11 +1,11 @@
 import math
 import os
 import unittest
-from opencmiss.utils.zinc.field import createFieldMeshIntegral
-from opencmiss.utils.zinc.finiteelement import find_node_with_name
-from opencmiss.zinc.field import Field
-from opencmiss.zinc.node import Node, Nodeset
-from opencmiss.zinc.result import RESULT_OK
+from cmlibs.utils.zinc.field import createFieldMeshIntegral
+from cmlibs.utils.zinc.finiteelement import find_node_with_name
+from cmlibs.zinc.field import Field
+from cmlibs.zinc.node import Node, Nodeset
+from cmlibs.zinc.result import RESULT_OK
 from scaffoldfitter.fitter import Fitter
 from scaffoldfitter.fitterjson import decodeJSONFitterSteps
 from scaffoldfitter.fitterstepalign import FitterStepAlign, createFieldsTransformations
@@ -23,7 +23,7 @@ def assertAlmostEqualList(testcase, actualList, expectedList, delta):
 
 def getRotationMatrix(eulerAngles):
     """
-    From OpenCMISS-Zinc graphics_library.cpp, transposed.
+    From Zinc graphics_library.cpp, transposed.
     :param eulerAngles: 3-component field of angles in radians, components:
     1 = azimuth (about z)
     2 = elevation (about rotated y)

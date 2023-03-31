@@ -1,8 +1,8 @@
 import math
 import os
 import unittest
-from opencmiss.utils.zinc.field import createFieldMeshIntegral
-from opencmiss.zinc.result import RESULT_OK
+from cmlibs.utils.zinc.field import createFieldMeshIntegral
+from cmlibs.zinc.result import RESULT_OK
 from scaffoldfitter.fitter import Fitter
 from scaffoldfitter.fitterstepfit import FitterStepFit
 

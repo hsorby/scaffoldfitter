@@ -4,16 +4,16 @@ Main class for fitting scaffolds.
 
 import json
 
-from opencmiss.maths.vectorops import sub
-from opencmiss.utils.zinc.field import assignFieldParameters, createFieldFiniteElementClone, getGroupList, \
+from cmlibs.maths.vectorops import sub
+from cmlibs.utils.zinc.field import assignFieldParameters, createFieldFiniteElementClone, getGroupList, \
     findOrCreateFieldFiniteElement, findOrCreateFieldStoredMeshLocation, getUniqueFieldName, orphanFieldByName
-from opencmiss.utils.zinc.finiteelement import evaluateFieldNodesetMean, evaluateFieldNodesetRange, \
+from cmlibs.utils.zinc.finiteelement import evaluateFieldNodesetMean, evaluateFieldNodesetRange, \
     findNodeWithName, getMaximumNodeIdentifier
-from opencmiss.utils.zinc.general import ChangeManager
-from opencmiss.zinc.context import Context
-from opencmiss.zinc.element import Elementbasis, Elementfieldtemplate
-from opencmiss.zinc.field import Field, FieldFindMeshLocation, FieldGroup
-from opencmiss.zinc.result import RESULT_OK, RESULT_WARNING_PART_DONE
+from cmlibs.utils.zinc.general import ChangeManager
+from cmlibs.zinc.context import Context
+from cmlibs.zinc.element import Elementbasis, Elementfieldtemplate
+from cmlibs.zinc.field import Field, FieldFindMeshLocation, FieldGroup
+from cmlibs.zinc.result import RESULT_OK, RESULT_WARNING_PART_DONE
 from scaffoldfitter.fitterstep import FitterStep
 from scaffoldfitter.fitterstepconfig import FitterStepConfig
 from scaffoldfitter.fitterstepfit import FitterStepFit
