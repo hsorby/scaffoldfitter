@@ -1,7 +1,7 @@
 Scaffold Fitter
 ===============
 
-Scaffold/model fitter using OpenCMISS-Zinc.
+Scaffold/model fitter using Zinc.
 
 Install with the following command::
 

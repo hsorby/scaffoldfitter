@@ -2,9 +2,9 @@
 Fit step for gross alignment and scale.
 """
 
-from opencmiss.utils.zinc.general import ChangeManager
-from opencmiss.zinc.optimisation import Optimisation
-from opencmiss.zinc.result import RESULT_OK
+from cmlibs.utils.zinc.general import ChangeManager
+from cmlibs.zinc.optimisation import Optimisation
+from cmlibs.zinc.result import RESULT_OK
 from scaffoldfitter.fitterstep import FitterStep
 import sys
 

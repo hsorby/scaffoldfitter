@@ -4,14 +4,14 @@ Fit step for gross alignment and scale.
 import copy
 import math
 
-from opencmiss.maths.vectorops import add, div, euler_to_rotation_matrix, matrix_vector_mult, mult, sub, identity_matrix
-from opencmiss.utils.zinc.field import get_group_list, create_field_euler_angles_rotation_matrix
-from opencmiss.utils.zinc.finiteelement import evaluate_field_nodeset_mean, getNodeNameCentres
-from opencmiss.utils.zinc.general import ChangeManager
-from opencmiss.zinc.element import Mesh
-from opencmiss.zinc.field import Field
-from opencmiss.zinc.optimisation import Optimisation
-from opencmiss.zinc.result import RESULT_OK, RESULT_WARNING_PART_DONE
+from cmlibs.maths.vectorops import add, div, euler_to_rotation_matrix, matrix_vector_mult, mult, sub, identity_matrix
+from cmlibs.utils.zinc.field import get_group_list, create_field_euler_angles_rotation_matrix
+from cmlibs.utils.zinc.finiteelement import evaluate_field_nodeset_mean, getNodeNameCentres
+from cmlibs.utils.zinc.general import ChangeManager
+from cmlibs.zinc.element import Mesh
+from cmlibs.zinc.field import Field
+from cmlibs.zinc.optimisation import Optimisation
+from cmlibs.zinc.result import RESULT_OK, RESULT_WARNING_PART_DONE
 from scaffoldfitter.fitterstep import FitterStep
 
 
