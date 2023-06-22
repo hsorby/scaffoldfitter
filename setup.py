@@ -21,16 +21,16 @@ readme = readfile("README.rst", split=True)
 # into the 'requirements.txt' file.
 requires = [
     # minimal requirements listing
-    "cmlibs.maths",
-    "cmlibs.utils",
-    "cmlibs.zinc"
+    "cmlibs.maths >= 0.3",
+    "cmlibs.utils >= 0.6",
+    "cmlibs.zinc >= 4.0"
 ]
 readme.extend(['', 'License', '=======', '', '::', ''])
 source_license = readfile("LICENSE")
 
 setup(
     name="scaffoldfitter",
-    version="0.7.0",
+    version="0.8.0",
     description="Scaffold/model geometric fitting library using Zinc.",
     long_description="\n".join(readme) + source_license,
     long_description_content_type="text/x-rst",

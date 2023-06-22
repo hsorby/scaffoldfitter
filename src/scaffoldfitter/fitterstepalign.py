@@ -232,7 +232,7 @@ class FitterStepAlign(FitterStep):
                     dataGroup = self._fitter.getGroupDataProjectionNodesetGroup(group)
                     if not dataGroup:
                         continue
-                    _, meshGroup = self._fitter.getGroupDataProjectionMeshGroup(group)
+                    meshGroup = self._fitter.getGroupDataProjectionMeshGroup(group)
                     if not meshGroup:
                         continue
                     groupName = group.getName()

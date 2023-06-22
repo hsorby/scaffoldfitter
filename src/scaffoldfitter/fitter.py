@@ -52,7 +52,9 @@ class Fitter:
         self._dataDeltaField = None  # self._dataHostCoordinatesField - self._markerDataCoordinatesField
         self._dataErrorField = None  # magnitude of _dataDeltaField
         self._dataWeightField = None  # field storing vector of weights for each data, marker point in local directions
+        self._activeDataGroupField = None
         self._activeDataNodesetGroup = None  # NodesetGroup containing all data and marker points involved in fit
+        self._activeDataProjectionGroupFields = []
         self._activeDataProjectionMeshGroups = []  # [dimension - 1] line and surfaces projected onto
         self._dataProjectionGroupNames = []  # list of group names with data point projections defined
         self._dataProjectionNodeGroupFields = []  # [dimension - 1]
@@ -67,17 +69,22 @@ class Fitter:
         self._markerLocationField = None
         self._markerNameField = None
         self._markerCoordinatesField = None
-        self._markerDataGroupField = None
         self._markerDataGroup = None
         self._markerDataCoordinatesField = None
         self._markerDataNameField = None
         self._markerDataLocationGroupField = None
         self._markerDataLocationGroup = None
-        self._deformActiveMeshGroup = None  # group containing union of strain, curvature active elements
+        # group containing union of strain, curvature active elements
+        self._deformActiveGroupField = None
+        self._deformActiveMeshGroup = None
+        # group owning active elements with strain penalties
+        self._strainActiveGroupField = None
+        self._strainActiveMeshGroup = None
+        # group owning active elements with curvature penalties
+        self._curvatureActiveGroupField = None
+        self._curvatureActiveMeshGroup = None
         self._strainPenaltyField = None  # field storing strain penalty as per-element constant
-        self._strainActiveMeshGroup = None  # group owning active elements with strain penalties
         self._curvaturePenaltyField = None  # field storing curvature penalty as per-element constant
-        self._curvatureActiveMeshGroup = None  # group owning active elements with curvature penalties
         self._dataCentre = [0.0, 0.0, 0.0]
         self._dataScale = 1.0
         self._diagnosticLevel = 0
@@ -232,7 +239,9 @@ class Fitter:
         self._dataDeltaField = None
         self._dataErrorField = None
         self._dataWeightField = None
+        self._activeDataGroupField = None
         self._activeDataNodesetGroup = None
+        self._activeDataProjectionGroupFields = []
         self._activeDataProjectionMeshGroups = []
         self._dataProjectionGroupNames = []
         self._dataProjectionNodeGroupFields = []
@@ -243,17 +252,19 @@ class Fitter:
         self._markerLocationField = None
         self._markerNameField = None
         self._markerCoordinatesField = None
-        self._markerDataGroupField = None
         self._markerDataGroup = None
         self._markerDataCoordinatesField = None
         self._markerDataNameField = None
         self._markerDataLocationGroupField = None
         self._markerDataLocationGroup = None
+        self._deformActiveGroupField = None
         self._deformActiveMeshGroup = None
-        self._strainPenaltyField = None
+        self._strainActiveGroupField = None
         self._strainActiveMeshGroup = None
-        self._curvaturePenaltyField = None
+        self._curvatureActiveGroupField = None
         self._curvatureActiveMeshGroup = None
+        self._strainPenaltyField = None
+        self._curvaturePenaltyField = None
 
     def load(self):
         """
@@ -306,14 +317,18 @@ class Fitter:
                 self._fieldmodule, "strain_penalty", components_count=meshDimension*meshDimension)
             self._curvaturePenaltyField = findOrCreateFieldFiniteElement(
                 self._fieldmodule, "curvature_penalty", components_count=coordinatesCount*meshDimension*meshDimension)
+            activeGroupFields = []
             activeMeshGroups = []
             for defname in ["deform", "strain", "curvature"]:
-                activeMeshName = defname + "_active_group." + meshName
-                activeElementGroup = self._fieldmodule.findFieldByName(activeMeshName).castElementGroup()
-                if not activeElementGroup.isValid():
-                    activeElementGroup = self._fieldmodule.createFieldElementGroup(mesh)
-                    activeElementGroup.setName(activeMeshName)
-                activeMeshGroups.append(activeElementGroup.getMeshGroup())
+                activeGroupName = defname + "_active_group." + meshName
+                activeGroupField = self._fieldmodule.findFieldByName(activeGroupName).castGroup()
+                if not activeGroupField.isValid():
+                    activeGroupField = self._fieldmodule.createFieldGroup()
+                    activeGroupField.setName(activeGroupName)
+                activeGroupFields.append(activeGroupField)
+                activeMeshGroups.append(activeGroupField.getOrCreateMeshGroup(mesh))
+            self._deformActiveGroupField, self._strainActiveGroupField, self._curvatureActiveGroupField = \
+                activeGroupFields
             self._deformActiveMeshGroup, self._strainActiveMeshGroup, self._curvatureActiveMeshGroup = activeMeshGroups
             # define storage for penalty fields on all elements of mesh
             elementtemplate = mesh.createElementtemplate()
@@ -378,20 +393,23 @@ class Fitter:
             self._dataWeightField = \
                 findOrCreateFieldFiniteElement(self._fieldmodule, "data_weight", components_count=coordinatesCount)
             activeDataName = "active_data.datapoints"
-            activeDataGroup = self._fieldmodule.findFieldByName(activeDataName).castNodeGroup()
-            if not activeDataGroup.isValid():
-                activeDataGroup = self._fieldmodule.createFieldNodeGroup(datapoints)
-                activeDataGroup.setName(activeDataName)
-            self._activeDataNodesetGroup = activeDataGroup.getNodesetGroup()
+            self._activeDataGroupField = self._fieldmodule.findFieldByName(activeDataName).castGroup()
+            if not self._activeDataGroupField.isValid():
+                self._activeDataGroupField = self._fieldmodule.createFieldGroup()
+                self._activeDataGroupField.setName(activeDataName)
+            self._activeDataNodesetGroup = self._activeDataGroupField.getOrCreateNodesetGroup(datapoints)
+            self._activeDataProjectionGroupFields = []
             self._activeDataProjectionMeshGroups = []
             for d in range(2):
                 mesh = self._mesh[d]
-                activeDataElementGroupName = "active_data." + mesh.getName()
-                activeDataElementGroup = self._fieldmodule.findFieldByName(activeDataElementGroupName).castElementGroup()
-                if not activeDataElementGroup.isValid():
-                    activeDataElementGroup = self._fieldmodule.createFieldElementGroup(mesh)
-                    activeDataElementGroup.setName(activeDataElementGroupName)
-                self._activeDataProjectionMeshGroups.append(activeDataElementGroup.getMeshGroup())
+                activeDataProjectionGroupName = "active_data." + mesh.getName()
+                activeDataProjectionGroupField = \
+                    self._fieldmodule.findFieldByName(activeDataProjectionGroupName).castGroup()
+                if not activeDataProjectionGroupField.isValid():
+                    activeDataProjectionGroupField = self._fieldmodule.createFieldGroup()
+                    activeDataProjectionGroupField.setName(activeDataProjectionGroupName)
+                self._activeDataProjectionGroupFields.append(activeDataProjectionGroupField)
+                self._activeDataProjectionMeshGroups.append(activeDataProjectionGroupField.getOrCreateMeshGroup(mesh))
 
     def _loadData(self):
         """
@@ -558,7 +576,6 @@ class Fitter:
         self._markerLocationField = None
         self._markerCoordinatesField = None
         self._markerNameField = None
-        self._markerDataGroupField = None
         self._markerDataGroup = None
         self._markerDataCoordinatesField = None
         self._markerDataNameField = None
@@ -571,7 +588,7 @@ class Fitter:
         self._markerGroup = fieldGroup
         self._markerGroupName = markerGroup.getName()
         nodes = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
-        self._markerNodeGroup = self._markerGroup.getFieldNodeGroup(nodes).getNodesetGroup()
+        self._markerNodeGroup = self._markerGroup.getNodesetGroup(nodes)
         if self._markerNodeGroup.isValid():
             node = self._markerNodeGroup.createNodeiterator().next()
             if node.isValid():
@@ -590,8 +607,7 @@ class Fitter:
         else:
             self._markerNodeGroup = None
         datapoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
-        self._markerDataGroupField = self._markerGroup.getFieldNodeGroup(datapoints)
-        self._markerDataGroup = self._markerDataGroupField.getNodesetGroup()
+        self._markerDataGroup = self._markerGroup.getNodesetGroup(datapoints)
         if self._markerDataGroup.isValid():
             datapoint = self._markerDataGroup.createNodeiterator().next()
             if datapoint.isValid():
@@ -608,7 +624,6 @@ class Fitter:
                             self._markerDataNameField = field
                     field = fielditer.next()
         else:
-            self._markerDataGroupField = None
             self._markerDataGroup = None
         self._calculateMarkerDataLocations()
 
@@ -627,7 +642,7 @@ class Fitter:
                 dataGroup = self.getGroupDataProjectionNodesetGroup(group)
                 if not dataGroup:
                     continue
-                _, meshGroup = self.getGroupDataProjectionMeshGroup(group)
+                meshGroup = self.getGroupDataProjectionMeshGroup(group)
                 meshDimension = meshGroup.getDimension()
                 if (meshDimension < 1) or (meshDimension > 2):
                     continue
@@ -703,11 +718,8 @@ class Fitter:
         # add None for default group
         for group in (getGroupList(self._fieldmodule) + [None]):
             if group:
-                elementGroup = group.getFieldElementGroup(mesh)
-                if not elementGroup.isValid():
-                    continue
-                meshGroup = elementGroup.getMeshGroup()
-                if meshGroup.getSize() == 0:
+                meshGroup = group.getMeshGroup(mesh)
+                if (not meshGroup.isValid()) or (meshGroup.getSize() == 0):
                     continue
                 groupName = group.getName()
             else:
@@ -856,10 +868,10 @@ class Fitter:
         datapoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
         meshDimension = mesh.getDimension()
         with ChangeManager(self._fieldmodule):
-            self._markerDataLocationGroupField = self._fieldmodule.createFieldNodeGroup(datapoints)
+            self._markerDataLocationGroupField = self._fieldmodule.createFieldGroup()
             self._markerDataLocationGroupField.setName(
                 getUniqueFieldName(self._fieldmodule, markerPrefix + "_data_location_group"))
-            self._markerDataLocationGroup = self._markerDataLocationGroupField.getNodesetGroup()
+            self._markerDataLocationGroup = self._markerDataLocationGroupField.createNodesetGroup(datapoints)
             nodetemplate = self._markerDataGroup.createNodetemplate()
             nodetemplate.defineField(self._dataHostLocationField)
             coordinatesCount = self._markerDataCoordinatesField.getNumberOfComponents()
@@ -877,7 +889,7 @@ class Fitter:
             undefineNodetemplate = None
             if self._modelFitGroup:
                 # following needed for re-finding marker point locations on boundary of model fit group
-                modelFitMeshGroup = self._modelFitGroup.getFieldElementGroup(mesh).getMeshGroup()
+                modelFitMeshGroup = self._modelFitGroup.getMeshGroup(mesh)
                 findMarkerLocation = self._fieldmodule.createFieldFindMeshLocation(
                     self._fieldmodule.createFieldEmbedded(
                         self._modelReferenceCoordinatesField, self._markerLocationField),
@@ -926,7 +938,7 @@ class Fitter:
             del fieldcache
             del findMarkerLocation
             # ensure activeDataNodeset only contains active marker points
-            self._activeDataNodesetGroup.removeNodesConditional(self._markerDataGroupField)
+            self._activeDataNodesetGroup.removeNodesConditional(self._markerGroup)
             self._activeDataNodesetGroup.addNodesConditional(self._markerDataLocationGroupField)
 
         # Warn about marker points without a location in model
@@ -1030,8 +1042,8 @@ class Fitter:
         fieldGroup = modelFitGroup.castGroup() if modelFitGroup else None
         assert (fieldGroup is None) or fieldGroup.isValid()
         if fieldGroup:
-            elementGroup = fieldGroup.getFieldElementGroup(self.getHighestDimensionMesh())
-            if not (elementGroup.isValid() and (elementGroup.getMeshGroup().getSize() > 0)):
+            meshGroup = fieldGroup.getMeshGroup(self.getHighestDimensionMesh())
+            if (not meshGroup.isValid()) or (meshGroup.getSize() == 0):
                 print("Cannot set model fit group", modelFitGroup.getName(), "as empty mesh group at highest dimension")
                 return
         self._modelFitGroup = fieldGroup
@@ -1131,10 +1143,10 @@ class Fitter:
             datapoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
             for d in range(2):
                 mesh = self._mesh[d]  # mesh1d, mesh2d
-                field = self._fieldmodule.createFieldNodeGroup(datapoints)
-                field.setName(getUniqueFieldName(self._fieldmodule, "data_projection_group_" + mesh.getName()))
-                self._dataProjectionNodeGroupFields.append(field)
-                self._dataProjectionNodesetGroups.append(field.getNodesetGroup())
+                group = self._fieldmodule.createFieldGroup()
+                group.setName(getUniqueFieldName(self._fieldmodule, "data_projection_group_" + mesh.getName()))
+                self._dataProjectionNodeGroupFields.append(group)
+                self._dataProjectionNodesetGroups.append(group.createNodesetGroup(datapoints))
             self._defineDataProjectionOrientationField()
 
     def calculateGroupDataProjections(self, fieldcache, group, dataGroup, meshGroup, meshLocation,
@@ -1185,7 +1197,7 @@ class Fitter:
         storeMesh = self.getHighestDimensionMesh()
         storeMeshDimension = storeMesh.getDimension()
         if self._modelFitGroup:
-            storeMesh = self._modelFitGroup.getFieldElementGroup(storeMesh).getMeshGroup()
+            storeMesh = self._modelFitGroup.getMeshGroup(storeMesh)
             assert storeMesh.isValid(), "Model fit group is wrong dimension"
         findLocation = self._fieldmodule.createFieldFindMeshLocation(
             dataCoordinates, self._modelCoordinatesField, storeMesh)
@@ -1220,26 +1232,22 @@ class Fitter:
         :return: Data NodesetGroup containing points for projection of group, otherwise None.
         """
         datapoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
-        dataGroupField = group.getFieldNodeGroup(datapoints)
-        if dataGroupField.isValid():
-            dataGroup = dataGroupField.getNodesetGroup()
-            if dataGroup.getSize() > 0:
-                return dataGroup
+        dataNodesetGroup = group.getNodesetGroup(datapoints)
+        if dataNodesetGroup.isValid() and (dataNodesetGroup.getSize() > 0):
+            return dataNodesetGroup
         return None
 
     def getGroupDataProjectionMeshGroup(self, group: FieldGroup):
         """
-        Get subobject group objects for 2D if not 1D mesh containing elements
+        Get mesh group for 2D if not 1D mesh containing elements
         for projecting data in group, if any.
-        :return: ElementGroupField, MeshGroup or None, None.
+        :return: MeshGroup or None if none or empty
         """
         for meshDimension in range(2, 0, -1):
-            elementGroupField = group.getFieldElementGroup(self._mesh[meshDimension - 1])
-            if elementGroupField.isValid():
-                meshGroup = elementGroupField.getMeshGroup()
-                if meshGroup.getSize() > 0:
-                    return elementGroupField, meshGroup
-        return None, None
+            meshGroup = group.getMeshGroup(self._mesh[meshDimension - 1])
+            if meshGroup.isValid() and (meshGroup.getSize() > 0):
+                return meshGroup
+        return None
 
     def calculateDataProjections(self, fitterStep: FitterStep):
         """
@@ -1269,7 +1277,7 @@ class Fitter:
                 dataGroup = self.getGroupDataProjectionNodesetGroup(group)
                 if not dataGroup:
                     continue
-                elementGroupField, meshGroup = self.getGroupDataProjectionMeshGroup(group)
+                meshGroup = self.getGroupDataProjectionMeshGroup(group)
                 if not meshGroup:
                     if self.getDiagnosticLevel() > 0:
                         if group != self._markerGroup:
@@ -1298,8 +1306,7 @@ class Fitter:
                 self.calculateGroupDataProjections(fieldcache, group, dataGroup, meshGroup, self._dataHostLocationField,
                                                    activeFitterStepConfig)
                 # add elements being projected onto to active group for mesh dimension
-                self._activeDataProjectionMeshGroups[meshGroup.getDimension() - 1].addElementsConditional(
-                    elementGroupField)
+                self._activeDataProjectionMeshGroups[meshGroup.getDimension() - 1].addElementsConditional(group)
 
             # Assign data projection orientation
             coordinatesCount = self._modelCoordinatesField.getNumberOfComponents()
@@ -1398,16 +1405,18 @@ class Fitter:
 
             if self.getDiagnosticLevel() > 0:
                 # Warn about unprojected points
-                unprojectedDatapoints = self._fieldmodule.createFieldNodeGroup(datapoints).getNodesetGroup()
-                unprojectedDatapoints.addNodesConditional(
+                unprojectedDataGroup = self._fieldmodule.createFieldGroup()
+                unprojectedDataNodesetGroup = unprojectedDataGroup.createNodesetGroup(datapoints)
+                unprojectedDataNodesetGroup.addNodesConditional(
                     self._fieldmodule.createFieldIsDefined(self._dataCoordinatesField))
                 for d in range(2):
-                    unprojectedDatapoints.removeNodesConditional(self._dataProjectionNodeGroupFields[d])
-                unprojectedCount = unprojectedDatapoints.getSize()
+                    unprojectedDataNodesetGroup.removeNodesConditional(self._dataProjectionNodeGroupFields[d])
+                unprojectedCount = unprojectedDataNodesetGroup.getSize()
                 if unprojectedCount > 0:
                     print("Warning: " + str(unprojectedCount) +
                           " data points with data coordinates have not been projected")
-                del unprojectedDatapoints
+                del unprojectedDataNodesetGroup
+                del unprojectedDataGroup
 
                 # Write projection error measures
                 rmsErrorValue, maxErrorValue = self.getDataRMSAndMaximumProjectionError()
@@ -1479,7 +1488,7 @@ class Fitter:
         assert group.isValid()
         nodeset = self._fieldmodule.findNodesetByFieldDomainType(
             Field.DOMAIN_TYPE_DATAPOINTS if isData else Field.DOMAIN_TYPE_NODES)
-        nodesetGroup = group.getFieldNodeGroup(nodeset).getNodesetGroup()
+        nodesetGroup = group.getNodesetGroup(nodeset)
         assert nodesetGroup.isValid()
         coordinates = self._fieldmodule.findFieldByName(coordinatesFieldName)
         return evaluateFieldNodesetMean(coordinates, nodesetGroup)
