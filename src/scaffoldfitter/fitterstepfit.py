@@ -528,9 +528,8 @@ class FitterStepFit(FitterStep):
         for dimension in range(self._fitter.getHighestDimensionMesh().getDimension(), 0, -1):
             mesh = self._fitter.getMesh(dimension)
             flattenMeshGroup = flattenGroup.getMeshGroup(mesh)
-            if flattenMeshGroup.isValid():
-                if flattenMeshGroup.getSize() > 0:
-                    break
+            if flattenMeshGroup.isValid() and (flattenMeshGroup.getSize() > 0):
+                break
         else:
             if self.getDiagnosticLevel() > 0:
                 print("Flatten group " + flattenGroupName + " is empty")
