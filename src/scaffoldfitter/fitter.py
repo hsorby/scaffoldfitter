@@ -804,17 +804,21 @@ class Fitter:
     def getActiveDataNodesetGroup(self):
         return self._activeDataNodesetGroup
 
-    def getDataRMSAndMaximumProjectionError(self):
+    def getDataRMSAndMaximumProjectionError(self, nodesetGroup=None):
         """
         Get RMS and maximum error for all active data and marker point projections.
         No group weights are applied.
+        Optional nodeset group parameter allows the user to make the calculation over a different group
+        from the active group.
+        :param nodesetGroup: Optional parameter to specify a particular nodeset group to make the calculation over.
         :return: RMS error value, maximum error value. Values are None if there is no data or bad fields.
         """
+        calculatedNodesetGroup = nodesetGroup if nodesetGroup else self._activeDataNodesetGroup
         with ChangeManager(self._fieldmodule):
             error = self._fieldmodule.createFieldMagnitude(self._dataDeltaField)
-            msError = self._fieldmodule.createFieldNodesetMeanSquares(error, self._activeDataNodesetGroup)
+            msError = self._fieldmodule.createFieldNodesetMeanSquares(error, calculatedNodesetGroup)
             rmsError = self._fieldmodule.createFieldSqrt(msError)
-            maxError = self._fieldmodule.createFieldNodesetMaximum(error, self._activeDataNodesetGroup)
+            maxError = self._fieldmodule.createFieldNodesetMaximum(error, calculatedNodesetGroup)
             fieldcache = self._fieldmodule.createFieldcache()
             rmsResult, rmsErrorValue = rmsError.evaluateReal(fieldcache, 1)
             maxResult, maxErrorValue = maxError.evaluateReal(fieldcache, 1)
@@ -824,6 +828,25 @@ class Fitter:
             del msError
             del error
         return rmsErrorValue if (rmsResult == RESULT_OK) else None, maxErrorValue if (maxResult == RESULT_OK) else None
+
+    def getDataRMSAndMaximumProjectionErrorForGroup(self, groupName):
+        """
+        Get RMS and maximum error for the nodeset group with the given name.
+        If the groupName is not a valid nodeset group name then -1, -1 is returned.
+
+        :param groupName: Name of group to make calculation over.
+        :return: RMS error value, maximum error value.
+        """
+        with ChangeManager(self._fieldmodule):
+            possibleGroup = self._fieldmodule.findFieldByName(groupName)
+            if possibleGroup.isValid() and possibleGroup.castGroup().isValid():
+                actualGroup = possibleGroup.castGroup()
+                calculationGroup  = self._fieldmodule.createFieldAnd(actualGroup, self._activeDataGroupField)
+                nodeset = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
+                nodesetGroup = actualGroup.getNodesetGroup(nodeset)
+                return self.getDataRMSAndMaximumProjectionError(nodesetGroup)
+
+        return -1, -1
 
     def getMarkerDataFields(self):
         """
