@@ -838,13 +838,16 @@ class Fitter:
         :return: RMS error value, maximum error value.
         """
         with ChangeManager(self._fieldmodule):
-            possibleGroup = self._fieldmodule.findFieldByName(groupName)
-            if possibleGroup.isValid() and possibleGroup.castGroup().isValid():
-                actualGroup = possibleGroup.castGroup()
-                calculationGroup  = self._fieldmodule.createFieldAnd(actualGroup, self._activeDataGroupField)
+            group = self._fieldmodule.findFieldByName(groupName).castGroup()
+            if group.isValid():
+                calculation_field  = self._fieldmodule.createFieldAnd(group, self._activeDataGroupField)
                 nodeset = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
-                nodesetGroup = actualGroup.getNodesetGroup(nodeset)
-                return self.getDataRMSAndMaximumProjectionError(nodesetGroup)
+                temp_dataset_group = self._fieldmodule.createFieldGroup().createNodesetGroup(nodeset)
+                temp_dataset_group.addNodesConditional(calculation_field)
+                result = self.getDataRMSAndMaximumProjectionError(temp_dataset_group)
+                del temp_dataset_group
+                del calculation_field
+                return result
 
         return -1, -1
 
