@@ -59,7 +59,6 @@ class FitterStepAlign(FitterStep):
         super(FitterStepAlign, self).__init__()
         self._alignGroups = False
         self._alignMarkers = False
-        self._auto_update_projections = False
         self._rotation = [0.0, 0.0, 0.0]
         self._scale = 1.0
         self._scaleProportion = 1.0
