@@ -831,8 +831,10 @@ class Fitter:
 
     def getDataRMSAndMaximumProjectionErrorForGroup(self, groupName):
         """
-        Get RMS and maximum error for the nodeset group with the given name.
-        If the groupName is not a valid nodeset group name then -1, -1 is returned.
+        Get RMS and maximum error for the intersection of the nodeset group with 
+        the given name and the active data group projections.
+        If the groupName is not a valid nodeset group name or the calculation fails
+        then None, None is returned.
 
         :param groupName: Name of group to make calculation over.
         :return: RMS error value, maximum error value.
@@ -849,7 +851,7 @@ class Fitter:
                 del calculation_field
                 return result
 
-        return -1, -1
+        return None, None
 
     def getMarkerDataFields(self):
         """
