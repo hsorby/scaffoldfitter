@@ -569,8 +569,8 @@ class FitCubeToSphereTestCase(unittest.TestCase):
             self.assertAlmostEqual(max_error, errors[1], 5)
 
         rms_error, max_error = fitter.getDataRMSAndMaximumProjectionErrorForGroup('left')
-        self.assertEqual(-1, rms_error)
-        self.assertEqual(-1, max_error)
+        self.assertEqual(None, rms_error)
+        self.assertEqual(None, max_error)
 
         # test override and inherit
         config2 = FitterStepConfig()
