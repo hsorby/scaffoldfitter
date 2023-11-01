@@ -556,6 +556,22 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         for groupName, count in groupSizes.items():
             self.assertEqual(count, getNodesetConditionalSize(
                 activeNodeset, fitter.getFieldmodule().findFieldByName(groupName)))
+
+        groupErrors = {
+            "bottom": (0.47716552515635985, 0.5001722675609085),
+            "sides": (0.3721661947669986, 0.5000286856904854),
+            "top": (0.5699148581001906, 0.6755409758922845),
+            "marker": (0.9354143466934853, 1.224744871391589)
+        }
+        for groupName, errors in groupErrors.items():
+            rms_error, max_error = fitter.getDataRMSAndMaximumProjectionErrorForGroup(groupName)
+            self.assertAlmostEqual(rms_error, errors[0], 5)
+            self.assertAlmostEqual(max_error, errors[1], 5)
+
+        rms_error, max_error = fitter.getDataRMSAndMaximumProjectionErrorForGroup('left')
+        self.assertEqual(None, rms_error)
+        self.assertEqual(None, max_error)
+
         # test override and inherit
         config2 = FitterStepConfig()
         fitter.addFitterStep(config2)
