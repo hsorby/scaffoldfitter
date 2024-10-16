@@ -14,6 +14,8 @@ from cmlibs.zinc.context import Context
 from cmlibs.zinc.element import Elementbasis, Elementfieldtemplate
 from cmlibs.zinc.field import Field, FieldFindMeshLocation, FieldGroup
 from cmlibs.zinc.result import RESULT_OK, RESULT_WARNING_PART_DONE
+
+from scaffoldfitter.fitterexceptions import FitterModelCoordinateField
 from scaffoldfitter.fitterstep import FitterStep
 from scaffoldfitter.fitterstepconfig import FitterStepConfig
 from scaffoldfitter.fitterstepfit import FitterStepFit
@@ -480,7 +482,8 @@ class Fitter:
                 sir.createStreamresourceMemoryBuffer(buffer)
                 result = self._region.read(sir)
                 if result != RESULT_OK:
-                    self.printLog()
+                    print("Node to datapoints log:")
+                    self.print_log()
                     raise AssertionError("Failed to load nodes as datapoints")
         # transfer datapoints to self._region
         sir = self._rawDataRegion.createStreaminformationRegion()
@@ -493,7 +496,7 @@ class Fitter:
         sir.createStreamresourceMemoryBuffer(buffer)
         result = self._region.read(sir)
         if result != RESULT_OK:
-            self.printLog()
+            self.print_log()
             raise AssertionError("Failed to load datapoints, result " + str(result))
         self._discoverDataCoordinatesField()
         self._discoverMarkerGroup()
@@ -1028,6 +1031,27 @@ class Fitter:
     def setModelCoordinatesFieldByName(self, modelCoordinatesFieldName):
         self.setModelCoordinatesField(self._fieldmodule.findFieldByName(modelCoordinatesFieldName))
 
+    def _find_first_coordinate_type_field(self):
+        field = None
+
+        mesh = self.getHighestDimensionMesh()
+        element = mesh.createElementiterator().next()
+        if element.isValid():
+            fieldcache = self._fieldmodule.createFieldcache()
+            fieldcache.setElement(element)
+            fielditer = self._fieldmodule.createFielditerator()
+            field = fielditer.next()
+            while field.isValid():
+                if field.isTypeCoordinate() and (field.getNumberOfComponents() == 3) and \
+                        (field.castFiniteElement().isValid()):
+                    if field.isDefinedAtLocation(fieldcache):
+                        break
+                field = fielditer.next()
+            else:
+                field = None
+
+        return field
+
     def _discoverModelCoordinatesField(self):
         """
         Choose default modelCoordinates field.
@@ -1037,24 +1061,14 @@ class Fitter:
         field = None
         if self._modelCoordinatesFieldName:
             field = self._fieldmodule.findFieldByName(self._modelCoordinatesFieldName)
-        else:
-            mesh = self.getHighestDimensionMesh()
-            element = mesh.createElementiterator().next()
-            if element.isValid():
-                fieldcache = self._fieldmodule.createFieldcache()
-                fieldcache.setElement(element)
-                fielditer = self._fieldmodule.createFielditerator()
-                field = fielditer.next()
-                while field.isValid():
-                    if field.isTypeCoordinate() and (field.getNumberOfComponents() == 3) and \
-                            (field.castFiniteElement().isValid()):
-                        if field.isDefinedAtLocation(fieldcache):
-                            break
-                    field = fielditer.next()
-                else:
-                    field = None
-        if field:
+
+        if field is None or not field.isValid():
+            field = self._find_first_coordinate_type_field()
+
+        if field and field.isValid():
             self.setModelCoordinatesField(field)
+        else:
+            raise FitterModelCoordinateField("No coordinate field found for model.")
 
     def getModelFitGroup(self):
         return self._modelFitGroup
@@ -1521,11 +1535,22 @@ class Fitter:
         coordinates = self._fieldmodule.findFieldByName(coordinatesFieldName)
         return evaluateFieldNodesetMean(coordinates, nodesetGroup)
 
-    def printLog(self):
+    def _log_message_type_to_text(self, message_type):
+        # 'MESSAGE_TYPE_ERROR', 'MESSAGE_TYPE_INFORMATION', 'MESSAGE_TYPE_INVALID', 'MESSAGE_TYPE_WARNING'
+        if self._logger.MESSAGE_TYPE_ERROR == message_type:
+            return "Error"
+        if self._logger.MESSAGE_TYPE_INFORMATION == message_type:
+            return "Information"
+        if self._logger.MESSAGE_TYPE_WARNING == message_type:
+            return "Warning"
+
+        return "Invalid"
+
+    def print_log(self):
         loggerMessageCount = self._logger.getNumberOfMessages()
         if loggerMessageCount > 0:
             for i in range(1, loggerMessageCount + 1):
-                print(self._logger.getMessageTypeAtIndex(i), self._logger.getMessageTextAtIndex(i))
+                print(f"[Message {i}] {self._log_message_type_to_text(self._logger.getMessageTypeAtIndex(i))}: {self._logger.getMessageTextAtIndex(i)}")
             self._logger.removeAllMessages()
 
     def getDiagnosticLevel(self):
@@ -1562,7 +1587,7 @@ class Fitter:
             if self._modelFitGroup:
                 sir.setResourceGroupName(srf, self._modelFitGroup.getName())
             result = self._region.write(sir)
-            # self.printLog()
+            # self.print_log()
 
             # restore original name
             self._modelCoordinatesField.setName(self._modelCoordinatesFieldName)

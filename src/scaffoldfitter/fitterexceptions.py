@@ -1,0 +1,3 @@
+
+class FitterModelCoordinateField(Exception):
+    pass
