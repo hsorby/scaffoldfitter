@@ -10,6 +10,7 @@ from cmlibs.utils.zinc.field import assignFieldParameters, createFieldFiniteElem
 from cmlibs.utils.zinc.finiteelement import evaluateFieldNodesetMean, evaluateFieldNodesetRange, \
     findNodeWithName, getMaximumNodeIdentifier
 from cmlibs.utils.zinc.general import ChangeManager
+from cmlibs.utils.zinc.region import write_to_buffer, read_from_buffer
 from cmlibs.zinc.context import Context
 from cmlibs.zinc.element import Elementbasis, Elementfieldtemplate
 from cmlibs.zinc.field import Field, FieldFindMeshLocation, FieldGroup
@@ -19,6 +20,14 @@ from scaffoldfitter.fitterexceptions import FitterModelCoordinateField
 from scaffoldfitter.fitterstep import FitterStep
 from scaffoldfitter.fitterstepconfig import FitterStepConfig
 from scaffoldfitter.fitterstepfit import FitterStepFit
+
+
+def _next_available_identifier(node_set, candidate):
+    node = node_set.findNodeByIdentifier(candidate)
+    while node.isValid():
+        candidate += 1
+        node = node_set.findNodeByIdentifier(candidate)
+    return candidate
 
 
 class Fitter:
@@ -413,6 +422,84 @@ class Fitter:
                 self._activeDataProjectionGroupFields.append(activeDataProjectionGroupField)
                 self._activeDataProjectionMeshGroups.append(activeDataProjectionGroupField.getOrCreateMeshGroup(mesh))
 
+    def _convert_marker_points(self):
+        """
+        Convert any scaffold marker points to data marker points.
+        Removing any coordinate fields that are only defined on the scaffold marker points
+        and not defined on the mesh.
+        Assigns material coordinates to the scaffold marker points when converting to
+        data marker points if not defined.
+        Assumes 'coordinates' is not a material coordinate field.
+        """
+        fm = self._rawDataRegion.getFieldmodule()
+        fc = fm.createFieldcache()
+        field_iter = fm.createFielditerator()
+
+        markerGroupName = self._markerGroupName if self._markerGroupName else "marker"
+        markerGroup = fm.findFieldByName(markerGroupName).castGroup()
+        if not markerGroup.isValid():
+            return
+
+        nodes = fm.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+        marker_nodeset_group = markerGroup.getNodesetGroup(nodes)
+        if not marker_nodeset_group.isValid():
+            return
+
+        marker_location_field = fm.findFieldByName("marker_location")
+        if not marker_location_field.isValid():
+            return
+
+        marker_node = marker_nodeset_group.createNodeiterator().next()
+        fc.setNode(marker_node)
+        field = field_iter.next()
+        defined_coordinate_fields = []
+        potential_material_coordinate_fields = []
+        while field.isValid():
+            is_coordinate_field = field.isTypeCoordinate() and (field.getNumberOfComponents() == 3) and field.castFiniteElement().isValid()
+            if field.isDefinedAtLocation(fc) and is_coordinate_field:
+                defined_coordinate_fields.append(field)
+            if (field.getName() != "coordinates") and is_coordinate_field:
+                potential_material_coordinate_fields.append(field)
+            field = field_iter.next()
+
+        undefined_potential_material_coordinate_fields = []
+        for f in potential_material_coordinate_fields:
+            if f not in defined_coordinate_fields:
+                undefined_potential_material_coordinate_fields.append(f)
+
+        if self._diagnosticLevel > 0:
+            print(f"Converting markers has {len(undefined_potential_material_coordinate_fields)} undefined potential material coordinate fields.")
+            print(f"The markers have {len(defined_coordinate_fields)} coordinate field(s) defined.")
+
+        if len(undefined_potential_material_coordinate_fields) > 0:
+            if self._diagnosticLevel > 0:
+                print(f"Defining {[f.getName() for f in undefined_potential_material_coordinate_fields]} on markers.")
+                print(f"Un-defining {[f.getName() for f in defined_coordinate_fields]} on markers.")
+
+            pending_assignments = []
+            node_template = nodes.createNodetemplate()
+            for f in undefined_potential_material_coordinate_fields:
+                node_template.defineField(f)
+                host_coordinates = fm.createFieldEmbedded(f, marker_location_field)
+                field_assignment = f.createFieldassignment(host_coordinates)
+                field_assignment.setNodeset(marker_nodeset_group)
+                pending_assignments.append(field_assignment)
+            for f in defined_coordinate_fields:
+                node_template.undefineField(f)
+                f.setManaged(False)
+
+            node_iter = marker_nodeset_group.createNodeiterator()
+            node = node_iter.next()
+            while node.isValid():
+                node.merge(node_template)
+                node = node_iter.next()
+
+            for f in pending_assignments:
+                f.assign()
+
+            if self._diagnosticLevel > 0:
+                print(f"Assigned {len(pending_assignments)} coordinate field(s).")
+
     def _loadData(self):
         """
         Load zinc data file into self._rawDataRegion.
@@ -455,46 +542,33 @@ class Fitter:
             if nodes.getSize() > 0:
                 datapoints = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
                 if datapoints.getSize() > 0:
-                    maximumDatapointIdentifier = max(0, getMaximumNodeIdentifier(datapoints))
-                    maximumNodeIdentifier = max(0, getMaximumNodeIdentifier(nodes))
-                    # this assumes identifiers are in low ranges and can be improved if there is a problem:
-                    identifierOffset = 100000
-                    while (maximumDatapointIdentifier > identifierOffset) or (maximumNodeIdentifier > identifierOffset):
-                        assert identifierOffset < 1000000000, "Invalid node and datapoint identifier ranges"
-                        identifierOffset *= 10
-                    while True:
-                        # logic relies on datapoints being in identifier order
-                        datapoint = datapoints.createNodeiterator().next()
-                        identifier = datapoint.getIdentifier()
-                        if identifier >= identifierOffset:
-                            break
-                        result = datapoint.setIdentifier(identifier + identifierOffset)
-                        assert result == RESULT_OK, "Failed to offset datapoint identifier"
+                    datapoint_iterator = datapoints.createNodeiterator()
+                    datapoint = datapoint_iterator.next()
+                    latest = 1
+                    datapoint_new_identifier_map = {}
+                    while datapoint.isValid():
+                        identifier = _next_available_identifier(nodes, latest)
+                        datapoint_new_identifier_map[identifier] = datapoint
+                        latest = identifier + 1
+                        datapoint = datapoint_iterator.next()
+
+                    for new_identifier, datapoint in datapoint_new_identifier_map.items():
+                        datapoint.setIdentifier(new_identifier)
+
+                self._convert_marker_points()
                 # transfer nodes as datapoints to self._region
-                sir = self._rawDataRegion.createStreaminformationRegion()
-                srm = sir.createStreamresourceMemory()
-                sir.setResourceDomainTypes(srm, Field.DOMAIN_TYPE_NODES)
-                self._rawDataRegion.write(sir)
-                result, buffer = srm.getBuffer()
-                assert result == RESULT_OK, "Failed to write nodes"
+                buffer = write_to_buffer(self._rawDataRegion, resource_domain_type=Field.DOMAIN_TYPE_NODES)
+                assert buffer is not None, "Failed to write nodes"
                 buffer = buffer.replace(bytes("!#nodeset nodes", "utf-8"), bytes("!#nodeset datapoints", "utf-8"))
-                sir = self._region.createStreaminformationRegion()
-                sir.createStreamresourceMemoryBuffer(buffer)
-                result = self._region.read(sir)
+                result = read_from_buffer(self._region, buffer)
                 if result != RESULT_OK:
                     print("Node to datapoints log:")
                     self.print_log()
                     raise AssertionError("Failed to load nodes as datapoints")
         # transfer datapoints to self._region
-        sir = self._rawDataRegion.createStreaminformationRegion()
-        srm = sir.createStreamresourceMemory()
-        sir.setResourceDomainTypes(srm, Field.DOMAIN_TYPE_DATAPOINTS)
-        self._rawDataRegion.write(sir)
-        result, buffer = srm.getBuffer()
-        assert result == RESULT_OK, "Failed to write datapoints"
-        sir = self._region.createStreaminformationRegion()
-        sir.createStreamresourceMemoryBuffer(buffer)
-        result = self._region.read(sir)
+        buffer = write_to_buffer(self._rawDataRegion, resource_domain_type=Field.DOMAIN_TYPE_DATAPOINTS)
+        assert buffer is not None, "Failed to write datapoints"
+        result = read_from_buffer(self._region, buffer)
         if result != RESULT_OK:
             self.print_log()
             raise AssertionError("Failed to load datapoints, result " + str(result))
