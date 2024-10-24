@@ -6,7 +6,7 @@ import math
 
 from cmlibs.maths.vectorops import add, div, euler_to_rotation_matrix, matrix_vector_mult, mult, sub, identity_matrix
 from cmlibs.utils.zinc.field import get_group_list, create_field_euler_angles_rotation_matrix
-from cmlibs.utils.zinc.finiteelement import evaluate_field_nodeset_mean, getNodeNameCentres
+from cmlibs.utils.zinc.finiteelement import evaluate_field_nodeset_range, getNodeNameCentres
 from cmlibs.utils.zinc.general import ChangeManager
 from cmlibs.zinc.element import Mesh
 from cmlibs.zinc.field import Field
@@ -236,11 +236,13 @@ class FitterStepAlign(FitterStep):
                     if not meshGroup:
                         continue
                     groupName = group.getName()
-                    meanDataCoordinates = evaluate_field_nodeset_mean(dataCoordinates, dataGroup)
+                    # use centre of bounding box as middle of data; previous use of mean was affected by uneven density
+                    minDataCoordinates, maxDataCoordinates = evaluate_field_nodeset_range(dataCoordinates, dataGroup)
+                    middleDataCoordinates = mult(add(minDataCoordinates, maxDataCoordinates), 0.5)
                     coordinates_integral = evaluate_field_mesh_integral(modelCoordinates, modelCoordinates, meshGroup)
                     mass = evaluate_field_mesh_integral(one, modelCoordinates, meshGroup)
                     meanModelCoordinates = div(coordinates_integral, mass)
-                    pointMap[groupName] = (meanModelCoordinates, meanDataCoordinates)
+                    pointMap[groupName] = (meanModelCoordinates, middleDataCoordinates)
                 del one
 
         if self._alignMarkers:
