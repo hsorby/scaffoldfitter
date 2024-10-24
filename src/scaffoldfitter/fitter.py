@@ -1197,7 +1197,7 @@ class Fitter:
         if centralProjection:
             # use centre of bounding box as middle of data; previous use of mean was affected by uneven density
             minDataCoordinates, maxDataCoordinates = evaluate_field_nodeset_range(dataCoordinates, dataGroup)
-            if minDataCoordinates is None:
+            if (minDataCoordinates is None) or (maxDataCoordinates is None):
                 print("Error: Central projection failed to get mean coordinates of data for group " + groupName)
                 return
             dataCentre = mult(add(minDataCoordinates, maxDataCoordinates), 0.5)
