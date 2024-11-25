@@ -4,11 +4,10 @@ Main class for fitting scaffolds.
 
 import json
 
-from cmlibs.maths.vectorops import sub
+from cmlibs.maths.vectorops import add, mult, sub
 from cmlibs.utils.zinc.field import assignFieldParameters, createFieldFiniteElementClone, getGroupList, \
     findOrCreateFieldFiniteElement, findOrCreateFieldStoredMeshLocation, getUniqueFieldName, orphanFieldByName
-from cmlibs.utils.zinc.finiteelement import evaluateFieldNodesetMean, evaluateFieldNodesetRange, \
-    findNodeWithName, getMaximumNodeIdentifier
+from cmlibs.utils.zinc.finiteelement import evaluate_field_nodeset_range, findNodeWithName, getMaximumNodeIdentifier
 from cmlibs.utils.zinc.general import ChangeManager
 from cmlibs.utils.zinc.region import write_to_buffer, read_from_buffer
 from cmlibs.zinc.context import Context
@@ -291,9 +290,9 @@ class Fitter:
         self._defineDataProjectionFields()
         # get centre and scale of data coordinates to manage fitting tolerances and steps
         datapoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
-        minimums, maximums = evaluateFieldNodesetRange(self._dataCoordinatesField, datapoints)
-        self._dataCentre = [0.5 * (minimums[c] + maximums[c]) for c in range(3)]
-        self._dataScale = max((maximums[c] - minimums[c]) for c in range(3))
+        minimums, maximums = evaluate_field_nodeset_range(self._dataCoordinatesField, datapoints)
+        self._dataCentre = mult(add(minimums, maximums), 0.5)
+        self._dataScale = max(sub(maximums, minimums))
         if self._diagnosticLevel > 0:
             print("Load data: data coordinates centre ", self._dataCentre)
             print("Load data: data coordinates scale ", self._dataScale)
@@ -1284,12 +1283,12 @@ class Fitter:
         dataProportion = activeFitterStepConfig.getGroupDataProportion(groupName)[0]
         centralProjection = activeFitterStepConfig.getGroupCentralProjection(groupName)[0]
         if centralProjection:
-            # get geometric centre of dataGroup
-            dataCentreField = self._fieldmodule.createFieldNodesetMean(dataCoordinates, dataGroup)
-            result, dataCentre = dataCentreField.evaluateReal(fieldcache, dataCoordinates.getNumberOfComponents())
-            if result != RESULT_OK:
-                print("Error: Centre Groups projection failed to get mean coordinates of data for group " + groupName)
+            # use centre of bounding box as middle of data; previous use of mean was affected by uneven density
+            minDataCoordinates, maxDataCoordinates = evaluate_field_nodeset_range(dataCoordinates, dataGroup)
+            if (minDataCoordinates is None) or (maxDataCoordinates is None):
+                print("Error: Central projection failed to get mean coordinates of data for group " + groupName)
                 return
+            dataCentre = mult(add(minDataCoordinates, maxDataCoordinates), 0.5)
             # print("Centre Groups dataCentre", dataCentre)
             # get geometric centre of meshGroup
             meshGroupCoordinatesIntegral = self._fieldmodule.createFieldMeshIntegral(

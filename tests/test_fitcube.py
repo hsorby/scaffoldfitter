@@ -2,7 +2,7 @@ import math
 import os
 import unittest
 from cmlibs.utils.zinc.field import createFieldMeshIntegral
-from cmlibs.utils.zinc.finiteelement import find_node_with_name
+from cmlibs.utils.zinc.finiteelement import evaluate_field_nodeset_mean, find_node_with_name
 from cmlibs.zinc.field import Field
 from cmlibs.zinc.node import Node, Nodeset
 from cmlibs.zinc.result import RESULT_OK
@@ -105,12 +105,17 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         self.assertEqual(fitter.getModelCoordinatesField().getName(), "coordinates")
         self.assertEqual(fitter.getDataCoordinatesField().getName(), "data_coordinates")
         self.assertEqual(fitter.getMarkerGroup().getName(), "marker")
-        bottomCentre1 = fitter.evaluateNodeGroupMeanCoordinates("bottom", "coordinates", isData=False)
-        sidesCentre1 = fitter.evaluateNodeGroupMeanCoordinates("sides", "coordinates", isData=False)
-        topCentre1 = fitter.evaluateNodeGroupMeanCoordinates("top", "coordinates", isData=False)
-        assertAlmostEqualList(self, bottomCentre1, [0.5, 0.5, 0.0], delta=1.0E-7)
-        assertAlmostEqualList(self, sidesCentre1, [0.5, 0.5, 0.5], delta=1.0E-7)
-        assertAlmostEqualList(self, topCentre1, [0.5, 0.5, 1.0], delta=1.0E-7)
+
+        fieldmodule = fitter.getFieldmodule()
+        nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+        coordinates = fieldmodule.findFieldByName("coordinates")
+        groupCentre1 = {}
+        for groupName in ["bottom", "sides", "top"]:
+            groupCentre1[groupName] = evaluate_field_nodeset_mean(
+                coordinates, fieldmodule.findFieldByName(groupName).castGroup().getNodesetGroup(nodes))
+        assertAlmostEqualList(self, groupCentre1["bottom"], [0.5, 0.5, 0.0], delta=1.0E-7)
+        assertAlmostEqualList(self, groupCentre1["sides"], [0.5, 0.5, 0.5], delta=1.0E-7)
+        assertAlmostEqualList(self, groupCentre1["top"], [0.5, 0.5, 1.0], delta=1.0E-7)
         align = FitterStepAlign()
         fitter.addFitterStep(align)
         align.setScale(1.1)
@@ -124,13 +129,14 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         rotationMatrix = getRotationMatrix(rotation)
         transformationMatrix = [v*scale for v in rotationMatrix]
         bottomCentre2Expected, sidesCentre2Expected, topCentre2Expected = transformCoordinatesList(
-            [bottomCentre1, sidesCentre1, topCentre1], transformationMatrix, translation)
-        bottomCentre2 = fitter.evaluateNodeGroupMeanCoordinates("bottom", "coordinates", isData=False)
-        sidesCentre2 = fitter.evaluateNodeGroupMeanCoordinates("sides", "coordinates", isData=False)
-        topCentre2 = fitter.evaluateNodeGroupMeanCoordinates("top", "coordinates", isData=False)
-        assertAlmostEqualList(self, bottomCentre2, bottomCentre2Expected, delta=1.0E-7)
-        assertAlmostEqualList(self, sidesCentre2, sidesCentre2Expected, delta=1.0E-7)
-        assertAlmostEqualList(self, topCentre2, topCentre2Expected, delta=1.0E-7)
+            [groupCentre1["bottom"], groupCentre1["sides"], groupCentre1["top"]], transformationMatrix, translation)
+        groupCentre2 = {}
+        for groupName in ["bottom", "sides", "top"]:
+            groupCentre2[groupName] = evaluate_field_nodeset_mean(
+                coordinates, fieldmodule.findFieldByName(groupName).castGroup().getNodesetGroup(nodes))
+        assertAlmostEqualList(self, groupCentre2["bottom"], bottomCentre2Expected, delta=1.0E-7)
+        assertAlmostEqualList(self, groupCentre2["sides"], sidesCentre2Expected, delta=1.0E-7)
+        assertAlmostEqualList(self, groupCentre2["top"], topCentre2Expected, delta=1.0E-7)
 
     def test_alignMarkersFitRegularData(self):
         """
@@ -279,8 +285,8 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         scale = align.getScale()
         translation = align.getTranslation()
         assertAlmostEqualList(self, rotation, [0.0, 0.0, 0.0], delta=1.0E-5)
-        self.assertAlmostEqual(scale, 1.040599599095245, places=5)
-        assertAlmostEqualList(self, translation, [-1.0405995643008867, -0.5202997843515198, -0.5202997827678563],
+        self.assertAlmostEqual(scale, 1.0035758865289246, places=5)
+        assertAlmostEqualList(self, translation, [-1.003575885551429, -0.5017879470320555, -0.5017879414518605],
                               delta=1.0E-6)
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
@@ -331,8 +337,8 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         self.assertEqual(result, RESULT_OK)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 11.263113922951398, delta=1.0E-4)
-        self.assertAlmostEqual(volume, 2.2557037278752086, delta=1.0E-4)
+        self.assertAlmostEqual(surfaceArea, 10.68348915904981, delta=1.0E-4)
+        self.assertAlmostEqual(volume, 2.1574515155924283, delta=1.0E-4)
 
         # test fibre orientation field
         fitter.load()
@@ -348,10 +354,10 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         fit1.run()
         # get end node coordinate to prove twist 
         nodeExpectedCoordinates = {
-            3: [0.8887749296131011, -0.48098055740637335, -0.5386959783454016],
-            6: [0.8797858554332283, 0.46116923672824744, -0.5527908283491083],
-            9: [0.8797858541365591, -0.4611692322900598, 0.5527908321128361],
-            12: [0.8887749312177851, 0.48098056254503413, 0.5386959806235349]}
+            3: [0.789915975359949, -0.47623734167234666, -0.5068423371261838],
+            6: [0.7837771099139238, 0.48421146804863563, -0.5263573197472752],
+            9: [0.7837771089771484, -0.4842114652148681, 0.5263573199420993],
+            12: [0.7899159763878485, 0.4762373443863354, 0.5068423367634244]}
         fieldcache = fieldmodule.createFieldcache()
         nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
         for nodeIdentifier, expectedCoordinates in nodeExpectedCoordinates.items():
