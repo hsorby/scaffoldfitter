@@ -30,7 +30,7 @@ source_license = readfile("LICENSE")
 
 setup(
     name="scaffoldfitter",
-    version="0.8.2",
+    version="0.8.3",
     description="Scaffold/model geometric fitting library using Zinc.",
     long_description="\n".join(readme) + source_license,
     long_description_content_type="text/x-rst",
