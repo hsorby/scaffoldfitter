@@ -385,7 +385,7 @@ class FitterStepFit(FitterStep):
                     fieldcache, flattenGroupObjective.getNumberOfComponents())
                 print("    Flatten group objective", objectiveFormat.format(objective))
             if self.getDiagnosticLevel() > 1:
-                self._fitter.printLog()
+                self._fitter.print_log()
 
         if self._updateReferenceState:
             self._fitter.updateModelReferenceCoordinates()
@@ -449,7 +449,7 @@ class FitterStepFit(FitterStep):
             # convert to local fibre directions, with possible dimension reduction for 2D, 1D
             fibreAxes = fieldmodule.createFieldFibreAxes(fibreField, modelReferenceCoordinates)
             if not fibreAxes.isValid():
-                self.getFitter().printLog()
+                self.getFitter().print_log()
             if dimension == 3:
                 fibreAxesT = fieldmodule.createFieldTranspose(3, fibreAxes)
             elif dimension == 2:
@@ -506,7 +506,7 @@ class FitterStepFit(FitterStep):
             deformationTerm = \
                 (deformationTerm + wtSqDeformationGradient2) if deformationTerm else wtSqDeformationGradient2
             if not deformationTerm.isValid():
-                self.getFitter().printLog()
+                self.getFitter().print_log()
                 raise AssertionError("Scaffoldfitter: Failed to get deformation term")
 
         deformationPenaltyObjective = fieldmodule.createFieldMeshIntegral(
