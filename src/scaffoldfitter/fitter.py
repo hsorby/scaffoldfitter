@@ -421,84 +421,6 @@ class Fitter:
                 self._activeDataProjectionGroupFields.append(activeDataProjectionGroupField)
                 self._activeDataProjectionMeshGroups.append(activeDataProjectionGroupField.getOrCreateMeshGroup(mesh))
 
-    def _convert_marker_points(self):
-        """
-        Convert any scaffold marker points to data marker points.
-        Removing any coordinate fields that are only defined on the scaffold marker points
-        and not defined on the mesh.
-        Assigns material coordinates to the scaffold marker points when converting to
-        data marker points if not defined.
-        Assumes 'coordinates' is not a material coordinate field.
-        """
-        fm = self._rawDataRegion.getFieldmodule()
-        fc = fm.createFieldcache()
-        field_iter = fm.createFielditerator()
-
-        markerGroupName = self._markerGroupName if self._markerGroupName else "marker"
-        markerGroup = fm.findFieldByName(markerGroupName).castGroup()
-        if not markerGroup.isValid():
-            return
-
-        nodes = fm.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
-        marker_nodeset_group = markerGroup.getNodesetGroup(nodes)
-        if not marker_nodeset_group.isValid():
-            return
-
-        marker_location_field = fm.findFieldByName("marker_location")
-        if not marker_location_field.isValid():
-            return
-
-        marker_node = marker_nodeset_group.createNodeiterator().next()
-        fc.setNode(marker_node)
-        field = field_iter.next()
-        defined_coordinate_fields = []
-        potential_material_coordinate_fields = []
-        while field.isValid():
-            is_coordinate_field = field.isTypeCoordinate() and (field.getNumberOfComponents() == 3) and field.castFiniteElement().isValid()
-            if field.isDefinedAtLocation(fc) and is_coordinate_field:
-                defined_coordinate_fields.append(field)
-            if (field.getName() != "coordinates") and is_coordinate_field:
-                potential_material_coordinate_fields.append(field)
-            field = field_iter.next()
-
-        undefined_potential_material_coordinate_fields = []
-        for f in potential_material_coordinate_fields:
-            if f not in defined_coordinate_fields:
-                undefined_potential_material_coordinate_fields.append(f)
-
-        if self._diagnosticLevel > 0:
-            print(f"Converting markers has {len(undefined_potential_material_coordinate_fields)} undefined potential material coordinate fields.")
-            print(f"The markers have {len(defined_coordinate_fields)} coordinate field(s) defined.")
-
-        if len(undefined_potential_material_coordinate_fields) > 0:
-            if self._diagnosticLevel > 0:
-                print(f"Defining {[f.getName() for f in undefined_potential_material_coordinate_fields]} on markers.")
-                print(f"Un-defining {[f.getName() for f in defined_coordinate_fields]} on markers.")
-
-            pending_assignments = []
-            node_template = nodes.createNodetemplate()
-            for f in undefined_potential_material_coordinate_fields:
-                node_template.defineField(f)
-                host_coordinates = fm.createFieldEmbedded(f, marker_location_field)
-                field_assignment = f.createFieldassignment(host_coordinates)
-                field_assignment.setNodeset(marker_nodeset_group)
-                pending_assignments.append(field_assignment)
-            for f in defined_coordinate_fields:
-                node_template.undefineField(f)
-                f.setManaged(False)
-
-            node_iter = marker_nodeset_group.createNodeiterator()
-            node = node_iter.next()
-            while node.isValid():
-                node.merge(node_template)
-                node = node_iter.next()
-
-            for f in pending_assignments:
-                f.assign()
-
-            if self._diagnosticLevel > 0:
-                print(f"Assigned {len(pending_assignments)} coordinate field(s).")
-
     def _loadData(self):
         """
         Load zinc data file into self._rawDataRegion.
@@ -554,7 +476,6 @@ class Fitter:
                     for new_identifier, datapoint in datapoint_new_identifier_map.items():
                         datapoint.setIdentifier(new_identifier)
 
-                self._convert_marker_points()
                 # transfer nodes as datapoints to self._region
                 buffer = write_to_buffer(self._rawDataRegion, resource_domain_type=Field.DOMAIN_TYPE_NODES)
                 assert buffer is not None, "Failed to write nodes"
