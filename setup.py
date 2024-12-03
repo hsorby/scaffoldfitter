@@ -22,7 +22,7 @@ readme = readfile("README.rst", split=True)
 requires = [
     # minimal requirements listing
     "cmlibs.maths >= 0.3",
-    "cmlibs.utils >= 0.6",
+    "cmlibs.utils >= 0.10",
     "cmlibs.zinc >= 4.0"
 ]
 readme.extend(['', 'License', '=======', '', '::', ''])
