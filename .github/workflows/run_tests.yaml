@@ -5,7 +5,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: macos-14
+    runs-on: ubuntu-22.04
     name: Run tests
     steps:
       - name: Clone source
@@ -17,6 +17,7 @@ jobs:
       - name: Install library
         shell: bash
         run: |
+          pip install https://github.com/cmlibs/zinc/releases/download/v4.2.0/cmlibs.zinc-4.2.0-cp311-cp311-linux_x86_64.whl
           pip install .
       - name: Run tests
         shell: bash
