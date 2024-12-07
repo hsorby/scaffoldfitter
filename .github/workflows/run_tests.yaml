@@ -1,4 +1,4 @@
-name: Build and test library
+name: Test library
 
 on:
   pull_request:
@@ -17,9 +17,9 @@ jobs:
       - name: Install library
         shell: bash
         run: |
-          pip install scaffoldfitter
+          ls
+          pip install .
       - name: Run tests
         shell: bash
         run: |
-          cd scaffoldfitter
           python -m unittest --discover -s
