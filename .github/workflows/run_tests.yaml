@@ -1,0 +1,25 @@
+name: Build and test library
+
+on:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-20.04
+    name: Run tests
+    steps:
+      - name: Clone source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+      - name: Install library
+        shell: bash
+        run: |
+          pip install scaffoldfitter
+      - name: Run tests
+        shell: bash
+        run: |
+          cd scaffoldfitter
+          python -m unittest --discover -s
