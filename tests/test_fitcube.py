@@ -775,11 +775,16 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         region.readFile(zinc_model_file)
 
         fm = region.getFieldmodule()
+        print(fm.isValid())
 
-        nodes = fm.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+        nodes = fm.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
         coordinates = fm.findFieldByName("coordinates")
+        print(coordinates.isValid())
         self.assertEqual(0, logger.getNumberOfMessages())
         min_range, max_range = evaluate_field_nodeset_range(coordinates, nodes)
+        print("------ ", logger.getNumberOfMessages())
+        for i in range(1, logger.getNumberOfMessages() + 1):
+            print(logger.getMessageTypeAtIndex(i), logger.getMessageTextAtIndex(i))
         self.assertEqual(0, logger.getNumberOfMessages())
         self.assertIsNotNone(min_range)
         self.assertIsNotNone(max_range)
