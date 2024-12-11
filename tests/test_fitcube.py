@@ -3,6 +3,7 @@ import os
 import unittest
 from cmlibs.utils.zinc.field import createFieldMeshIntegral
 from cmlibs.utils.zinc.finiteelement import evaluate_field_nodeset_mean, find_node_with_name, evaluate_field_nodeset_range
+from cmlibs.utils.zinc.region import write_to_buffer, read_from_buffer
 from cmlibs.zinc.context import Context
 from cmlibs.zinc.field import Field
 from cmlibs.zinc.node import Node, Nodeset
@@ -773,21 +774,32 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         logger = context.getLogger()
         region = context.getDefaultRegion()
         region.readFile(zinc_model_file)
+        data_region = context.createRegion()
+        data_region.readFile(os.path.join(here, "resources", "cube_to_sphere_data_random.exf"))
 
         fm = region.getFieldmodule()
-        print(fm.isValid())
 
+        buffer = write_to_buffer(data_region, resource_domain_type=Field.DOMAIN_TYPE_DATAPOINTS)
+        result = read_from_buffer(region, buffer)
         nodes = fm.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
-        coordinates = fm.findFieldByName("coordinates")
-        print(coordinates.isValid())
+
+        # Coordinate field 'data_coordinates' is defined on datapoints so nodeset evaluation should
+        # result in something that is not None being returned.
+        data_coordinates = fm.findFieldByName("data_coordinates")
         self.assertEqual(0, logger.getNumberOfMessages())
-        min_range, max_range = evaluate_field_nodeset_range(coordinates, nodes)
-        print("------ ", logger.getNumberOfMessages())
-        for i in range(1, logger.getNumberOfMessages() + 1):
-            print(logger.getMessageTypeAtIndex(i), logger.getMessageTextAtIndex(i))
+        min_range, max_range = evaluate_field_nodeset_range(data_coordinates, nodes)
         self.assertEqual(0, logger.getNumberOfMessages())
         self.assertIsNotNone(min_range)
         self.assertIsNotNone(max_range)
+
+        # Coordinate field 'coordinates' is not defined on datapoints so nodeset evaluation should
+        # result in None being returned.
+        coordinates = fm.findFieldByName("coordinates")
+        self.assertEqual(0, logger.getNumberOfMessages())
+        min_range, max_range = evaluate_field_nodeset_range(coordinates, nodes)
+        self.assertEqual(0, logger.getNumberOfMessages())
+        self.assertIsNone(min_range)
+        self.assertIsNone(max_range)
 
 
 if __name__ == "__main__":
