@@ -59,6 +59,7 @@ class FitterStepAlign(FitterStep):
         super(FitterStepAlign, self).__init__()
         self._alignGroups = False
         self._alignMarkers = False
+        self._alignManually = False
         self._rotation = [0.0, 0.0, 0.0]
         self._scale = 1.0
         self._scaleProportion = 1.0
@@ -78,6 +79,7 @@ class FitterStepAlign(FitterStep):
         dct.update(dctIn)
         self._alignGroups = dct["alignGroups"]
         self._alignMarkers = dct["alignMarkers"]
+        self._alignManually = dct["alignManually"]
         self._rotation = dct["rotation"]
         self._scale = dct["scale"]
         scaleProportion = dct.get("scaleProportion")
@@ -94,6 +96,7 @@ class FitterStepAlign(FitterStep):
         dct.update({
             "alignGroups": self._alignGroups,
             "alignMarkers": self._alignMarkers,
+            "alignManually": self._alignManually,
             "rotation": self._rotation,
             "scale": self._scale,
             "scaleProportion": self._scaleProportion,
@@ -131,6 +134,27 @@ class FitterStepAlign(FitterStep):
             self._alignMarkers = alignMarkers
             return True
         return False
+
+    def isAlignManually(self):
+        return self._alignManually
+
+    def setAlignManually(self, alignManually):
+        if alignManually != self._alignManually:
+            self._alignManually = alignManually
+            return True
+        return False
+
+    def canAlignGroups(self):
+        fieldmodule = self._fitter.getFieldmodule()
+        groups = get_group_list(fieldmodule)
+        return len(groups) > 0
+
+    def canAlignMarkers(self):
+        markerNodeGroup, markerLocation, markerCoordinates, markerName = self._fitter.getMarkerModelFields()
+        nodes_ok = markerNodeGroup is not None and markerCoordinates is not None and markerName is not None
+        markerDataGroup, markerDataCoordinates, markerDataName = self._fitter.getMarkerDataFields()
+        data_ok = markerDataGroup is not None and markerDataCoordinates is not None and markerDataName is not None
+        return nodes_ok and data_ok
 
     def getRotation(self):
         return self._rotation
@@ -197,23 +221,28 @@ class FitterStepAlign(FitterStep):
         """
         modelCoordinates = self._fitter.getModelCoordinatesField()
         assert modelCoordinates, "Align:  Missing model coordinates"
-        if self._alignGroups or self._alignMarkers:
+        if not self._alignManually and (self._alignGroups or self._alignMarkers):
             self._doAutoAlign()
-        fieldmodule = self._fitter.getFieldmodule()
-        with ChangeManager(fieldmodule):
-            # rotate, scale and translate model
-            modelCoordinatesTransformed = createFieldsTransformations(
-                modelCoordinates, self._rotation, self._scale, self._translation)[0]
-            fieldassignment = modelCoordinates.createFieldassignment(modelCoordinatesTransformed)
-            result = fieldassignment.assign()
-            assert result in [RESULT_OK, RESULT_WARNING_PART_DONE], "Align:  Failed to transform model"
-            self._fitter.updateModelReferenceCoordinates()
-            del fieldassignment
-            del modelCoordinatesTransformed
+
+        self._applyAlignment(modelCoordinates)
+
         self._fitter.calculateDataProjections(self)
         if modelFileNameStem:
             self._fitter.writeModel(modelFileNameStem + "_align.exf")
         self.setHasRun(True)
+
+    def _applyAlignment(self, model_coordinates):
+        fieldmodule = self._fitter.getFieldmodule()
+        with ChangeManager(fieldmodule):
+            # rotate, scale and translate model
+            model_coordinates_transformed = createFieldsTransformations(
+                model_coordinates, self._rotation, self._scale, self._translation)[0]
+            fieldassignment = model_coordinates.createFieldassignment(model_coordinates_transformed)
+            result = fieldassignment.assign()
+            assert result in [RESULT_OK, RESULT_WARNING_PART_DONE], "Align:  Failed to transform model"
+            self._fitter.updateModelReferenceCoordinates()
+            del fieldassignment
+            del model_coordinates_transformed
 
     def _doAutoAlign(self):
         """
