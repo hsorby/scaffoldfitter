@@ -180,6 +180,10 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         self.assertEqual(2, len(fitter.getFitterSteps()))
         self.assertTrue(align.setAlignMarkers(True))
         self.assertTrue(align.isAlignMarkers())
+        self.assertTrue(align.canAlignMarkers())
+        self.assertTrue(align.canAlignGroups())
+        self.assertTrue(align.canAutoAlign())
+
         align.run()
         # fitter.getRegion().writeFile(os.path.join(here, "resources", "km_fitgeometry2.exf"))
         rotation = align.getRotation()
