@@ -183,6 +183,8 @@ class FitCubeToSphereTestCase(unittest.TestCase):
         self.assertTrue(align.canAlignMarkers())
         self.assertTrue(align.canAlignGroups())
         self.assertTrue(align.canAutoAlign())
+        self.assertEqual(4, align.matchingMarkerCount())
+        self.assertEqual(3, align.matchingGroupCount())
 
         align.run()
         # fitter.getRegion().writeFile(os.path.join(here, "resources", "km_fitgeometry2.exf"))

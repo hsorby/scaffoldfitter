@@ -216,10 +216,14 @@ class FitterStepAlign(FitterStep):
 
         return matches
 
+    def matchingMarkerCount(self):
+        return len(self._match_markers())
+
+    def matchingGroupCount(self):
+        return self._alignable_group_count()
+
     def canAutoAlign(self):
-        group_count = self._alignable_group_count()
-        matches = self._match_markers()
-        total = group_count + len(matches)
+        total = self.matchingGroupCount() + self.matchingMarkerCount()
         return total > 2
 
     def canAlignGroups(self):
