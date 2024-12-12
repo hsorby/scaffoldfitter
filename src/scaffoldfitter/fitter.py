@@ -283,12 +283,13 @@ class Fitter:
         """
         self._clearFields()
         self._region = self._context.createRegion()
+        self._region.setName("model_region")
         self._fieldmodule = self._region.getFieldmodule()
         self._rawDataRegion = self._region.createChild("raw_data")
         self._loadModel()
         self._loadData()
         self._defineDataProjectionFields()
-        # get centre and scale of data coordinates to manage fitting tolerances and steps
+        # Get centre and scale of data coordinates to manage fitting tolerances and steps.
         datapoints = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
         minimums, maximums = evaluate_field_nodeset_range(self._dataCoordinatesField, datapoints)
         self._dataCentre = mult(add(minimums, maximums), 0.5)
@@ -495,11 +496,12 @@ class Fitter:
         self._discoverDataCoordinatesField()
         self._discoverMarkerGroup()
 
-    def run(self, endStep=None, modelFileNameStem=None, reorder = False):
+    def run(self, endStep=None, modelFileNameStem=None, reorder=False):
         """
         Run either all remaining fitter steps or up to specified end step.
         :param endStep: Last fitter step to run, or None to run all.
         :param modelFileNameStem: File name stem for writing intermediate model files.
+        :param reorder: Reload if reordering.
         :return: True if reloaded (so scene changed), False if not.
         """
         if not endStep:
@@ -543,6 +545,7 @@ class Fitter:
         """
         self._dataCoordinatesField = None
         field = None
+
         if self._dataCoordinatesFieldName:
             field = self._fieldmodule.findFieldByName(self._dataCoordinatesFieldName)
         if not (field and field.isValid()):
