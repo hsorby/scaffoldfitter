@@ -60,6 +60,13 @@ class FitterStepAlign(FitterStep):
         self._alignGroups = False
         self._alignMarkers = False
         self._alignManually = False
+        self._rotation = None
+        self._scale = None
+        self._scaleProportion = None
+        self._translation = None
+        self._init_fit_parameters()
+
+    def _init_fit_parameters(self):
         self._rotation = [0.0, 0.0, 0.0]
         self._scale = 1.0
         self._scaleProportion = 1.0
@@ -289,6 +296,10 @@ class FitterStepAlign(FitterStep):
         assert modelCoordinates, "Align:  Missing model coordinates"
         if not self._alignManually and (self._alignGroups or self._alignMarkers):
             self._doAutoAlign()
+        elif not self._alignManually and not (self._alignGroups or self._alignMarkers):
+            # Nothing is set, so make the fit do nothing by setting the fit parameters to
+            # their identity values.
+            self._init_fit_parameters()
 
         self._applyAlignment(modelCoordinates)
 
