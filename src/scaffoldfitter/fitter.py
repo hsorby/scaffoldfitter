@@ -358,8 +358,6 @@ class Fitter:
                 self._strainPenaltyField.assignReal(fieldcache, zeroValues)
                 self._curvaturePenaltyField.assignReal(fieldcache, zeroValues)
                 element = elemIter.next()
-            self._fieldmodule.endChange()
-            self._fieldmodule.beginChange()
 
     def getStrainPenaltyField(self):
         return self._strainPenaltyField
@@ -508,7 +506,8 @@ class Fitter:
             endStep = self._fitterSteps[-1]
         endIndex = self._fitterSteps.index(endStep)
         # reload only if necessary
-        if endStep.hasRun() and (endIndex < (len(self._fitterSteps) - 1)) and self._fitterSteps[endIndex + 1].hasRun() or reorder:
+        if (endStep.hasRun() and (endIndex < (len(self._fitterSteps) - 1)) and self._fitterSteps[endIndex + 1].hasRun()
+                or reorder):
             # re-load to get back to current state
             self.load()
             for index in range(1, endIndex + 1):
@@ -527,7 +526,7 @@ class Fitter:
         return self._dataCoordinatesField
 
     def setDataCoordinatesField(self, dataCoordinatesField: Field):
-        if dataCoordinatesField == self._dataCoordinatesField:
+        if (self._dataCoordinatesField is not None) and (dataCoordinatesField == self._dataCoordinatesField):
             return
         finiteElementField = dataCoordinatesField.castFiniteElement()
         assert finiteElementField.isValid() and (finiteElementField.getNumberOfComponents() == 3)
@@ -581,7 +580,7 @@ class Fitter:
         self._markerDataNameField = None
         self._markerDataLocationGroupField = None
         self._markerDataLocationGroup = None
-        if not markerGroup:
+        if not (markerGroup and markerGroup.isValid()):
             return
         fieldGroup = markerGroup.castGroup()
         assert fieldGroup.isValid()
@@ -1011,7 +1010,7 @@ class Fitter:
         return self._modelReferenceCoordinatesField
 
     def setModelCoordinatesField(self, modelCoordinatesField: Field):
-        if modelCoordinatesField == self._modelCoordinatesField:
+        if (self._modelCoordinatesField is not None) and (modelCoordinatesField == self._modelCoordinatesField):
             return
         finiteElementField = modelCoordinatesField.castFiniteElement()
         mesh = self.getHighestDimensionMesh()
@@ -1205,6 +1204,9 @@ class Fitter:
         sizeBefore = dataProjectionNodesetGroup.getSize()
         dataCoordinates = self._dataCoordinatesField
         dataProportion = activeFitterStepConfig.getGroupDataProportion(groupName)[0]
+        outlierLength = activeFitterStepConfig.getGroupOutlierLength(groupName)[0]
+        maximumProjectionLength = 0.0
+        dataProjectionLengths = []  # For relative outliers: list of (data identifier, projection length)
         centralProjection = activeFitterStepConfig.getGroupCentralProjection(groupName)[0]
         if centralProjection:
             # use centre of bounding box as middle of data; previous use of mean was affected by uneven density
@@ -1255,8 +1257,21 @@ class Fitter:
                     result = meshLocation.assignMeshLocation(fieldcache, element, xi)
                     assert result == RESULT_OK, \
                         "Error: Failed to assign data projection mesh location for group " + groupName
-                    dataProjectionNodesetGroup.addNode(node)
+                    result, projectionLength = self._dataErrorField.evaluateReal(fieldcache, 1)
+                    if projectionLength > maximumProjectionLength:
+                        maximumProjectionLength = projectionLength
+                    if outlierLength < 0.0:
+                        # store and filter once we know the maximum
+                        dataProjectionLengths.append((node.getIdentifier(), projectionLength))
+                    if (outlierLength <= 0.0) or (projectionLength <= outlierLength):
+                        dataProjectionNodesetGroup.addNode(node)
             node = nodeIter.next()
+        if outlierLength < 0.0:
+            relativeOutlierLength = (1.0 + outlierLength) * maximumProjectionLength
+            for nodeIdentifier, projectionLength in dataProjectionLengths:
+                if projectionLength > relativeOutlierLength:
+                    node = dataGroup.findNodeByIdentifier(nodeIdentifier)
+                    dataProjectionNodesetGroup.removeNode(node)
         pointsProjected = dataProjectionNodesetGroup.getSize() - sizeBefore
         if pointsProjected < dataGroup.getSize():
             if self.getDiagnosticLevel() > 0:

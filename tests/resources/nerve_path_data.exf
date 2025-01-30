@@ -1,0 +1,445 @@
+EX Version: 3
+Region: /
+!#nodeset nodes
+Define node template: node1
+Shape. Dimension=0
+#Fields=2
+1) coordinates, coordinate, rectangular cartesian, real, #Components=3
+ x. #Values=1 (value)
+ y. #Values=1 (value)
+ z. #Values=1 (value)
+2) radius, field, rectangular cartesian, real, #Components=1
+ 1. #Values=1 (value)
+Node template: node1
+Node: 1
+  0.000000000000000e+00
+  0.000000000000000e+00
+  0.000000000000000e+00
+  1.000000000000000e-01
+Node: 2
+  1.268127999027491e-01
+  1.485386676480870e-02
+ -3.084532940765190e-03
+  1.000000000000000e-01
+Node: 3
+  2.661834410914702e-01
+  2.988656846479497e-02
+  1.520078113045476e-02
+  1.000000000000000e-01
+Node: 4
+  3.763090463383942e-01
+  4.084082112347601e-02
+ -8.436450429835918e-03
+  1.000000000000000e-01
+Node: 5
+  4.970071981730984e-01
+  5.683123942857052e-02
+  2.981415844697662e-03
+  1.000000000000000e-01
+Node: 6
+  6.267160509197875e-01
+  7.944844922997860e-02
+  2.922110895115540e-02
+  1.000000000000000e-01
+Node: 7
+  7.516089807117706e-01
+  1.032873915196679e-01
+  2.828271942018926e-02
+  1.000000000000000e-01
+Node: 8
+  8.792332217917370e-01
+  1.137163509055087e-01
+  4.187548993979717e-02
+  1.000000000000000e-01
+Node: 9
+  1.004322099487448e+00
+  1.161867320306473e-01
+  3.415856655305519e-02
+  1.000000000000000e-01
+Node: 10
+  1.125000000000000e+00
+  1.500000000000000e-01
+  3.750000000000001e-02
+  1.000000000000000e-01
+Node: 11
+  1.250685479331871e+00
+  1.417835820037650e-01
+  4.139368739393701e-02
+  1.000000000000000e-01
+Node: 12
+  1.363487284764555e+00
+  1.695974776532856e-01
+  6.058688632014356e-02
+  1.000000000000000e-01
+Node: 13
+  1.500162231380612e+00
+  1.941109571035204e-01
+  4.993539439892255e-02
+  1.000000000000000e-01
+Node: 14
+  1.625472986465793e+00
+  1.994971303808985e-01
+  5.397830868828891e-02
+  1.000000000000000e-01
+Node: 15
+  1.752857082508711e+00
+  2.142729017322424e-01
+  5.975037032240213e-02
+  1.000000000000000e-01
+Node: 16
+  1.885173795513750e+00
+  2.342959755476723e-01
+  4.310447783617498e-02
+  1.000000000000000e-01
+Node: 17
+  2.043127582911362e+00
+  2.564887153105069e-01
+  5.678950632951621e-02
+  1.000000000000000e-01
+Node: 18
+  2.180442242637544e+00
+  2.795006049649633e-01
+  5.704490367710317e-02
+  1.000000000000000e-01
+Node: 19
+  2.256795803907497e+00
+  4.830067835983026e-01
+  6.455959083479379e-02
+  1.000000000000000e-01
+Node: 20
+  2.351219445321600e+00
+  2.929216133405695e-01
+  8.412458093551649e-02
+  1.000000000000000e-01
+Node: 21
+  2.476253911707148e+00
+  3.056820217163982e-01
+  1.017965205960728e-01
+  1.000000000000000e-01
+Node: 22
+  2.598548156898376e+00
+  3.225615808661720e-01
+  1.239156548444783e-01
+  1.000000000000000e-01
+Node: 23
+  2.716547107561680e+00
+  3.252968826590740e-01
+  1.403721152224806e-01
+  1.000000000000000e-01
+Node: 24
+  2.875376560253264e+00
+  3.749769848977499e-01
+  1.714504874906988e-01
+  1.000000000000000e-01
+Node: 25
+  2.999835640390629e+00
+  4.057072993976580e-01
+  2.258739148720607e-01
+  1.000000000000000e-01
+Node: 26
+  8.787546565480959e-01
+  2.181768731052285e-01
+ -2.574715347028992e-02
+  1.000000000000000e-01
+Node: 27
+  8.894799087326666e-01
+  3.150565783432900e-01
+ -8.135851517783455e-02
+  1.000000000000000e-01
+Node: 28
+  9.044947802096663e-01
+  4.321484178181704e-01
+ -1.102860494126359e-01
+  1.000000000000000e-01
+Node: 29
+  9.309803472148042e-01
+  5.362968375724390e-01
+ -1.322302755113713e-01
+  1.000000000000000e-01
+Node: 30
+  9.584233453625356e-01
+  6.421200817291355e-01
+ -1.472574070983014e-01
+  1.000000000000000e-01
+Node: 31
+  9.812212975237149e-01
+  7.381243588333077e-01
+ -1.430792243487689e-01
+  1.000000000000000e-01
+Node: 32
+  1.012031734798514e+00
+  8.415480150625341e-01
+ -1.193918680457745e-01
+  1.000000000000000e-01
+Node: 33
+  1.031548560374665e+00
+  9.390774278899959e-01
+ -1.340181029754887e-01
+  1.000000000000000e-01
+Node: 34
+  1.048001137079606e+00
+  1.038169714495518e+00
+ -1.754413180166496e-01
+  1.000000000000000e-01
+Node: 35
+  1.027185378770396e+00
+  1.149163969720970e+00
+ -2.553982253809922e-01
+  1.000000000000000e-01
+Node: 36
+  9.583493691357553e-01
+  1.243930797495954e+00
+ -3.743261670161229e-01
+  1.000000000000000e-01
+Node: 37
+  1.801286008445946e+00
+  1.348690796079472e-01
+  1.237264081657487e-01
+  1.000000000000000e-01
+Node: 38
+  1.862897924270055e+00
+  3.429284936439925e-02
+  1.852685207143950e-01
+  1.000000000000000e-01
+Node: 39
+  1.907672779486821e+00
+ -5.634578616398449e-02
+  2.413467998374131e-01
+  1.000000000000000e-01
+Node: 40
+  1.980499747497405e+00
+ -1.534608351150134e-01
+  3.115808066798290e-01
+  1.000000000000000e-01
+Node: 41
+  2.035122597376741e+00
+ -2.422973672541776e-01
+  3.746713966651106e-01
+  1.000000000000000e-01
+Node: 42
+  2.096872915023072e+00
+ -3.377589309505377e-01
+  4.307904046793957e-01
+  1.000000000000000e-01
+Node: 43
+  2.102748514127351e+00
+ -4.518702719040515e-01
+  5.211904746432283e-01
+  1.000000000000000e-01
+Node: 44
+  2.070213033936137e+00
+ -5.812609121151026e-01
+  5.944007913479817e-01
+  1.000000000000000e-01
+!#nodeset datapoints
+Define node template: node2
+Shape. Dimension=0
+#Fields=2
+1) coordinates, coordinate, rectangular cartesian, real, #Components=3
+ x. #Values=1 (value)
+ y. #Values=1 (value)
+ z. #Values=1 (value)
+2) marker_name, field, rectangular cartesian, string, #Components=1
+ 1. #Values=1 (value)
+Node template: node2
+Node: 1
+  2.761834410914702e-01
+  2.888656846479497e-02
+  1.420078113045476e-02
+  landmark1
+Node: 2
+  2.736547107561680e+00
+  3.262968826590740e-01
+  1.413721152224806e-01
+  landmark2
+!#mesh mesh1d, dimension=1, nodeset=nodes
+Define element template: element1
+Shape. Dimension=1, line
+#Scale factor sets=0
+#Nodes=2
+#Fields=2
+1) coordinates, coordinate, rectangular cartesian, real, #Components=3
+ x. l.Lagrange, no modify, standard node based.
+  #Nodes=2
+  1. #Values=1
+   Value labels: value
+  2. #Values=1
+   Value labels: value
+ y. l.Lagrange, no modify, standard node based.
+  #Nodes=2
+  1. #Values=1
+   Value labels: value
+  2. #Values=1
+   Value labels: value
+ z. l.Lagrange, no modify, standard node based.
+  #Nodes=2
+  1. #Values=1
+   Value labels: value
+  2. #Values=1
+   Value labels: value
+2) radius, field, rectangular cartesian, real, #Components=1
+ 1. l.Lagrange, no modify, standard node based.
+  #Nodes=2
+  1. #Values=1
+   Value labels: value
+  2. #Values=1
+   Value labels: value
+Element template: element1
+Element: 1
+ Nodes:
+ 1 2
+Element: 2
+ Nodes:
+ 2 3
+Element: 3
+ Nodes:
+ 3 4
+Element: 4
+ Nodes:
+ 4 5
+Element: 5
+ Nodes:
+ 5 6
+Element: 6
+ Nodes:
+ 6 7
+Element: 7
+ Nodes:
+ 7 8
+Element: 8
+ Nodes:
+ 8 9
+Element: 9
+ Nodes:
+ 9 10
+Element: 10
+ Nodes:
+ 10 11
+Element: 11
+ Nodes:
+ 11 12
+Element: 12
+ Nodes:
+ 12 13
+Element: 13
+ Nodes:
+ 13 14
+Element: 14
+ Nodes:
+ 14 15
+Element: 15
+ Nodes:
+ 15 16
+Element: 16
+ Nodes:
+ 16 17
+Element: 17
+ Nodes:
+ 17 18
+Element: 18
+ Nodes:
+ 18 19
+Element: 19
+ Nodes:
+ 19 20
+Element: 20
+ Nodes:
+ 20 21
+Element: 21
+ Nodes:
+ 21 22
+Element: 22
+ Nodes:
+ 22 23
+Element: 23
+ Nodes:
+ 23 24
+Element: 24
+ Nodes:
+ 24 25
+Element: 25
+ Nodes:
+ 8 26
+Element: 26
+ Nodes:
+ 26 27
+Element: 27
+ Nodes:
+ 27 28
+Element: 28
+ Nodes:
+ 28 29
+Element: 29
+ Nodes:
+ 29 30
+Element: 30
+ Nodes:
+ 30 31
+Element: 31
+ Nodes:
+ 31 32
+Element: 32
+ Nodes:
+ 32 33
+Element: 33
+ Nodes:
+ 33 34
+Element: 34
+ Nodes:
+ 34 35
+Element: 35
+ Nodes:
+ 35 36
+Element: 36
+ Nodes:
+ 15 37
+Element: 37
+ Nodes:
+ 37 38
+Element: 38
+ Nodes:
+ 38 39
+Element: 39
+ Nodes:
+ 39 40
+Element: 40
+ Nodes:
+ 40 41
+Element: 41
+ Nodes:
+ 41 42
+Element: 42
+ Nodes:
+ 42 43
+Element: 43
+ Nodes:
+ 43 44
+Group name: branch1
+!#nodeset nodes
+Node group:
+8,26..36
+!#mesh mesh1d, dimension=1, nodeset=nodes
+Element group:
+25..35
+Group name: branch2
+!#nodeset nodes
+Node group:
+15,37..44
+!#mesh mesh1d, dimension=1, nodeset=nodes
+Element group:
+36..43
+Group name: marker
+!#nodeset datapoints
+Node group:
+1..2
+Group name: meshEdits
+!#nodeset nodes
+Node group:
+15,37..44
+Group name: trunk
+!#nodeset nodes
+Node group:
+1..25
+!#mesh mesh1d, dimension=1, nodeset=nodes
+Element group:
+1..24
