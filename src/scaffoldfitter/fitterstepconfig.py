@@ -148,7 +148,7 @@ class FitterStepConfig(FitterStep):
             if not isinstance(outlierLength, float):
                 outlierLength = self.getGroupOutlierLength(groupName)[0]
             elif outlierLength < -1.0:
-                proportion = -1.0
+                outlierLength = -1.0
         self.setGroupSetting(groupName, self._outlierLengthToken, outlierLength)
 
     def run(self, modelFileNameStem=None):
