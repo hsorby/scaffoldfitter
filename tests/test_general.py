@@ -76,6 +76,18 @@ class GeneralTestCase(unittest.TestCase):
             self.assertAlmostEqual(rmsError, expectedRmsError, delta=TOL)  # sqrt(0.12)
             self.assertAlmostEqual(maxError, expectedMaxError, delta=TOL)
 
+    def test_setting_group_outlier_length(self):
+        zinc_model_file = os.path.join(here, "resources", "nerve_trunk_model.exf")
+        zinc_data_file = os.path.join(here, "resources", "nerve_path_data.exf")
+
+        fitter = Fitter(zinc_model_file, zinc_data_file)
+
+        config1 = FitterStepConfig()
+        fitter.addFitterStep(config1)
+
+        config1.setGroupOutlierLength(None, -3.0)
+        self.assertEqual(-1.0, config1.getGroupOutlierLength(None)[0])
+
 
 if __name__ == "__main__":
     unittest.main()
