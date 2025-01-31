@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools-git-versioning]
+enabled = true
+
+[project]
+name = "scaffoldfitter"
+dynamic = ["version"]
+keywords = ["Medical", "Physiology", "Anatomical", "Mesh", "Finite Element", "Fitting", "SPARC"]
+readme = "README.rst"
+license = {file = "LICENSE"}
+authors = [
+    { name="Richard Christie", email="r.christie@auckland.ac.nz" },
+]
+dependencies = [
+    "cmlibs.maths >= 0.6.2",
+    "cmlibs.utils >= 0.6",
+    "cmlibs.zinc >= 4.1"
+]
+description = "Scaffold/model geometric fitting library using Zinc."
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+
+[tool.setuptools_scm]
