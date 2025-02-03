@@ -1075,7 +1075,7 @@ class Fitter:
         mesh of highest dimension in model
         :param modelFitGroup: Zinc group or None for whole mesh.
         """
-        if modelFitGroup == self._modelFitGroup:
+        if (self._modelFitGroup is not None) and (modelFitGroup == self._modelFitGroup):
             return
         fieldGroup = modelFitGroup.castGroup() if modelFitGroup else None
         assert (fieldGroup is None) or fieldGroup.isValid()
