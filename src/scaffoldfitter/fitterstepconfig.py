@@ -11,6 +11,7 @@ class FitterStepConfig(FitterStep):
     _jsonTypeId = "_FitterStepConfig"
     _centralProjectionToken = "centralProjection"
     _dataProportionToken = "dataProportion"
+    _outlierLengthToken = "outlierLength"
 
     def __init__(self):
         super(FitterStepConfig, self).__init__()
@@ -62,7 +63,7 @@ class FitterStepConfig(FitterStep):
         This can help fit groups which start well away from their targets.
         :param groupName:  Exact model group name, or None for default group.
         :param centralProjection:  Boolean True/False or None to reset to global
-        default. Function ensures value is valid.
+        default (False). Function ensures value is valid.
         """
         if centralProjection is not None:
             if not isinstance(centralProjection, bool):
@@ -96,7 +97,7 @@ class FitterStepConfig(FitterStep):
         global default.
         :param groupName:  Exact model group name, or None for default group.
         :param proportion:  Float valued proportion from 0.0 (0%) to 1.0 (100%),
-        or None to reset to global default. Function ensures value is valid.
+        or None to reset to global default (1.0). Function ensures value is valid.
         """
         if proportion is not None:
             if not isinstance(proportion, float):
@@ -106,6 +107,49 @@ class FitterStepConfig(FitterStep):
             elif proportion > 1.0:
                 proportion = 1.0
         self.setGroupSetting(groupName, self._dataProportionToken, proportion)
+
+    def clearGroupOutlierLength(self, groupName):
+        """
+        Clear local group outlier length so fall back to last config or global default.
+        :param groupName:  Exact model group name, or None for default group.
+        """
+        self.clearGroupSetting(groupName, self._outlierLengthToken)
+
+    def getGroupOutlierLength(self, groupName):
+        """
+        Get relative or absolute length of data projections above which data points are treated as
+        outliers and not included in the fit, plus flags indicating where it has been set.
+        Values from -1.0 up to < 0.0 are negative proportions of maximum data projection to exclude,
+        e.g. -0.1 excludes data points within 10% of the maximum data projection.
+        Value 0.0 disables outlier filtering and includes all data (subject to other filters).
+        Values > 0.0 gives absolute projection length above which data points are excluded.
+        If not set or inherited, gets value from default group.
+        :param groupName:  Exact model group name, or None for default group.
+        :return:  OutlierLength, setLocally, inheritable.
+        Absolute outlier length > 0.0, or 0.0 to include all data (default).
+        The second return value is True if the value is set locally to a value
+        or None if reset locally.
+        The third return value is True if a previous config has set the value.
+        """
+        return self.getGroupSetting(groupName, self._outlierLengthToken, 0.0)
+
+    def setGroupOutlierLength(self, groupName, outlierLength):
+        """
+        Set relative or absolute length of data projections above which data points are treated as
+        outliers and not included in the fit, plus flags indicating where it has been set, or
+        reset to global default.
+        :param groupName:  Exact model group name, or None for default group.
+        :param outlierLength:  From -1.0 to < 0.0: negative proportion to exclude, 0.0: disable
+        outlier filter, > 0.0: absolute projection length above which data points are exclude,
+        None to reset to global default (0.0).
+        Function ensures value is valid.
+        """
+        if outlierLength is not None:
+            if not isinstance(outlierLength, float):
+                outlierLength = self.getGroupOutlierLength(groupName)[0]
+            elif outlierLength < -1.0:
+                outlierLength = -1.0
+        self.setGroupSetting(groupName, self._outlierLengthToken, outlierLength)
 
     def run(self, modelFileNameStem=None):
         """
