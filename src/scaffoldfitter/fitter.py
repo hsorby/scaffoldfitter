@@ -883,8 +883,7 @@ class Fitter:
         """
         group = self._fieldmodule.findFieldByName(group_name).castGroup()
         if group.isValid():
-            result = self.getLowestElementJacobian(group)
-            return result
+            return self.getLowestElementJacobian(group)
 
         return None, None
 
