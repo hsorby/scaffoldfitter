@@ -853,9 +853,11 @@ class Fitter:
 
         return None, None
 
-    def getModelWorstElementJacobianInfo(self, mesh_group=None):
+    def getLowestElementJacobian(self, mesh_group=None):
         """
         Get the information on the 3D element with the worst jacobian value (most negative).
+        For a right-handed element values <= 0.0 are bad, the opposite holds for left-handed
+        elements.
         Optional mesh group parameter allows the user to make the calculation over a different group
         from the whole mesh.
         :param mesh_group: Optional parameter to specify a particular mesh group to make the calculation over.
@@ -863,24 +865,26 @@ class Fitter:
         """
         with ChangeManager(self._fieldmodule):
             jacobian = calculate_jacobian(self._modelCoordinatesField)
-            report = report_on_lowest_value(jacobian, mesh_group if mesh_group else None)
+            report = report_on_lowest_value(jacobian, mesh_group)
+            del jacobian
 
         return report
 
-    def getModelWorstElementJacobianInfoForGroup(self, group_name):
+    def getLowestElementJacobianForGroup(self, group_name):
         """
-        Get the information on the 3D element with the worst jacobian
+        Get the information on the 3D element with the worst Jacobian
         value (most negative) of the 3D mesh group with the given name.
         If the group_name is not a valid group name then None, None is returned.
+        If the fields for the calculation of the Jacobian are invalid then
+        -1, infinity is returned.
 
         :param group_name: Name of group to make calculation over.
-        :return: Element identifier, minimum jacobian value.
+        :return: Element identifier, minimum Jacobian value.
         """
-        with ChangeManager(self._fieldmodule):
-            group = self._fieldmodule.findFieldByName(group_name).castGroup()
-            if group.isValid():
-                result = self.getMeshWorstElementJacobianInfo(group)
-                return result
+        group = self._fieldmodule.findFieldByName(group_name).castGroup()
+        if group.isValid():
+            result = self.getLowestElementJacobian(group)
+            return result
 
         return None, None
 
