@@ -882,7 +882,8 @@ class Fitter:
         """
         group = self._fieldmodule.findFieldByName(group_name).castGroup()
         if group.isValid():
-            return self.getLowestElementJacobian(group)
+            mesh_group = group.getMeshGroup(self._mesh)
+            return self.getLowestElementJacobian(mesh_group)
 
         return None, None
 
