@@ -9,7 +9,7 @@ from cmlibs.utils.zinc.field import assignFieldParameters, createFieldFiniteElem
     findOrCreateFieldFiniteElement, findOrCreateFieldStoredMeshLocation, getUniqueFieldName, orphanFieldByName
 from cmlibs.utils.zinc.finiteelement import evaluate_field_nodeset_range, findNodeWithName
 from cmlibs.utils.zinc.general import ChangeManager
-from cmlibs.utils.zinc.mesh import calculate_jacobian, report_on_lowest_value
+from cmlibs.utils.zinc.field import get_element_jacobian_field, get_scalar_field_minimum_in_mesh
 from cmlibs.utils.zinc.region import write_to_buffer, read_from_buffer
 from cmlibs.zinc.context import Context
 from cmlibs.zinc.element import Elementbasis, Elementfieldtemplate
@@ -864,11 +864,11 @@ class Fitter:
         :return: Element identifier, minimum jacobian value. Values are -1, inf if there is no data or bad fields.
         """
         with ChangeManager(self._fieldmodule):
-            jacobian = calculate_jacobian(self._modelCoordinatesField)
-            report = report_on_lowest_value(jacobian, mesh_group)
+            jacobian = get_element_jacobian_field(self._modelCoordinatesField)
+            result = get_scalar_field_minimum_in_mesh(jacobian, mesh_group)
             del jacobian
 
-        return report
+        return result
 
     def getLowestElementJacobianForGroup(self, group_name):
         """
