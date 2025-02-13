@@ -6,7 +6,8 @@ import json
 
 from cmlibs.maths.vectorops import add, mult, sub
 from cmlibs.utils.zinc.field import assignFieldParameters, createFieldFiniteElementClone, getGroupList, \
-    findOrCreateFieldFiniteElement, findOrCreateFieldStoredMeshLocation, getUniqueFieldName, orphanFieldByName, create_jacobian_determinant_field
+    findOrCreateFieldFiniteElement, findOrCreateFieldStoredMeshLocation, getUniqueFieldName, orphanFieldByName, \
+    create_xi_reference_jacobian_determinant_field
 from cmlibs.utils.zinc.finiteelement import evaluate_field_nodeset_range, findNodeWithName, get_scalar_field_minimum_in_mesh
 from cmlibs.utils.zinc.general import ChangeManager
 from cmlibs.utils.zinc.region import write_to_buffer, read_from_buffer
@@ -863,7 +864,7 @@ class Fitter:
         :return: Element identifier, minimum jacobian value. Values are -1, inf if there is no data or bad fields.
         """
         with ChangeManager(self._fieldmodule):
-            jacobian = create_jacobian_determinant_field(self._modelCoordinatesField)
+            jacobian = create_xi_reference_jacobian_determinant_field(self._modelCoordinatesField)
             result = get_scalar_field_minimum_in_mesh(jacobian, mesh_group)
             del jacobian
 
