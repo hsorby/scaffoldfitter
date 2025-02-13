@@ -6,8 +6,9 @@ import json
 
 from cmlibs.maths.vectorops import add, mult, sub
 from cmlibs.utils.zinc.field import assignFieldParameters, createFieldFiniteElementClone, getGroupList, \
-    findOrCreateFieldFiniteElement, findOrCreateFieldStoredMeshLocation, getUniqueFieldName, orphanFieldByName
-from cmlibs.utils.zinc.finiteelement import evaluate_field_nodeset_range, findNodeWithName, getMaximumNodeIdentifier
+    findOrCreateFieldFiniteElement, findOrCreateFieldStoredMeshLocation, getUniqueFieldName, orphanFieldByName, \
+    create_xi_reference_jacobian_determinant_field
+from cmlibs.utils.zinc.finiteelement import evaluate_field_nodeset_range, findNodeWithName, get_scalar_field_minimum_in_mesh
 from cmlibs.utils.zinc.general import ChangeManager
 from cmlibs.utils.zinc.region import write_to_buffer, read_from_buffer
 from cmlibs.zinc.context import Context
@@ -186,7 +187,7 @@ class Fitter:
         """
         refType = type(refFitterStep)
         for index in range(self._fitterSteps.index(refFitterStep) - 1, -1, -1):
-            if type(self._fitterSteps[index]) == refType:
+            if type(self._fitterSteps[index]) is refType:
                 return self._fitterSteps[index]
         return None
 
@@ -841,7 +842,7 @@ class Fitter:
         with ChangeManager(self._fieldmodule):
             group = self._fieldmodule.findFieldByName(groupName).castGroup()
             if group.isValid():
-                calculation_field  = self._fieldmodule.createFieldAnd(group, self._activeDataGroupField)
+                calculation_field = self._fieldmodule.createFieldAnd(group, self._activeDataGroupField)
                 nodeset = self._fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
                 temp_dataset_group = self._fieldmodule.createFieldGroup().createNodesetGroup(nodeset)
                 temp_dataset_group.addNodesConditional(calculation_field)
@@ -849,6 +850,41 @@ class Fitter:
                 del temp_dataset_group
                 del calculation_field
                 return result
+
+        return None, None
+
+    def getLowestElementJacobian(self, mesh_group=None):
+        """
+        Get the information on the 3D element with the worst jacobian value (most negative).
+        For a right-handed element values <= 0.0 are bad, the opposite holds for left-handed
+        elements.
+        Optional mesh group parameter allows the user to make the calculation over a different group
+        from the whole mesh.
+        :param mesh_group: Optional parameter to specify a particular mesh group to make the calculation over.
+        :return: Element identifier, minimum jacobian value. Values are -1, inf if there is no data or bad fields.
+        """
+        with ChangeManager(self._fieldmodule):
+            jacobian = create_xi_reference_jacobian_determinant_field(self._modelCoordinatesField)
+            result = get_scalar_field_minimum_in_mesh(jacobian, mesh_group)
+            del jacobian
+
+        return result
+
+    def getLowestElementJacobianForGroup(self, group_name):
+        """
+        Get the information on the 3D element with the worst Jacobian
+        value (most negative) of the 3D mesh group with the given name.
+        If the group_name is not a valid group name then None, None is returned.
+        If the fields for the calculation of the Jacobian are invalid then
+        -1, infinity is returned.
+
+        :param group_name: Name of group to make calculation over.
+        :return: Element identifier, minimum Jacobian value.
+        """
+        group = self._fieldmodule.findFieldByName(group_name).castGroup()
+        if group.isValid():
+            mesh_group = group.getMeshGroup(self._mesh)
+            return self.getLowestElementJacobian(mesh_group)
 
         return None, None
 
@@ -1096,7 +1132,6 @@ class Fitter:
         Discover modelFitGroup from set name.
         """
         self._modelFitGroup = None
-        field = None
         if self._modelFitGroupName:
             field = self._fieldmodule.findFieldByName(self._modelFitGroupName)
             if field.isValid():
@@ -1161,7 +1196,6 @@ class Fitter:
         Discover flattenGroup from set name.
         """
         self._flattenGroup = None
-        field = None
         if self._flattenGroupName:
             field = self._fieldmodule.findFieldByName(self._flattenGroupName)
             if field.isValid():
